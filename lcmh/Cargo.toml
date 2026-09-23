@@ -17,6 +17,6 @@ categories = ["mathematics", "science"]
 readme = "README.md"
 
 [lib]
-crate-type = ["lib"]
+crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
