@@ -293,7 +293,7 @@ pub struct LcmhSingleQubitCliffordOperation {
 pub struct LcmhSearchArtifacts {
     /// The local Clifford operations that do the graph transformation.
     pub local_clifford_ops: *mut LcmhSingleQubitCliffordOperation,
-    pub length_lc_ops: usize,
+    pub length_local_clifford_ops: usize,
     /// The costs of all the intermediate (accepted) graphs.
     pub costs: *mut f64,
     pub length_costs: usize,

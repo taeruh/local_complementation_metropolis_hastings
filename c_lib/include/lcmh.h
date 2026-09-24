@@ -41,7 +41,7 @@ typedef struct LcmhSingleQubitCliffordOperation
 
 struct LcmhSearchArtifacts {
   LcmhSingleQubitCliffordOperation *local_clifford_ops;
-  size_t length_lc_ops;
+  size_t length_local_clifford_ops;
   double *costs;
   size_t length_costs;
 };
