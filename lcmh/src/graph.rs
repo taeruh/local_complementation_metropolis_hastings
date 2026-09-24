@@ -1,11 +1,15 @@
 use std::collections::HashSet;
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub struct Graph {
     nodes: Vec<HashSet<usize>>,
 }
 
 impl Graph {
+    pub fn mut_test(&mut self) -> &mut Vec<HashSet<usize>> {
+        &mut self.nodes
+    }
+
     pub fn new(size: usize) -> Self {
         let mut nodes = Vec::with_capacity(size);
         for _ in 0..size {
@@ -70,5 +74,25 @@ impl Graph {
     // this more efficiently as struct member (if that is actually more efficient))
     pub fn num_edges(&self) -> usize {
         self.nodes.iter().map(|neighbours| neighbours.len()).sum::<usize>() / 2
+    }
+
+    pub fn local_complementation(&mut self, node: usize) {
+        debug_assert!(node < self.nodes.len(), "Node index out of bounds: {node}");
+        let neighbours: Vec<usize> = self.nodes[node].iter().cloned().collect();
+        for (i, &a) in neighbours.iter().enumerate() {
+            for &b in neighbours.iter().skip(i + 1) {
+                if self.nodes[a].contains(&b) {
+                    #[cfg(debug_assertions)]
+                    self.remove_edge(a, b);
+                    #[cfg(not(debug_assertions))]
+                    self.remove_edge_unchecked(a, b);
+                } else {
+                    #[cfg(debug_assertions)]
+                    self.add_edge(a, b);
+                    #[cfg(not(debug_assertions))]
+                    self.add_edge_unchecked(a, b);
+                }
+            }
+        }
     }
 }

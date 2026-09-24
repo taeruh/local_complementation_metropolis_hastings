@@ -1,6 +1,6 @@
-use std::{mem::ManuallyDrop, ptr};
+use std::mem::ManuallyDrop;
 
-use crate::search::{self, CoolingConfiguration, LocalClifford, SearchArtifacts};
+use crate::search::{self, CoolingConfiguration, SearchArtifacts};
 
 // On most platforms (appartly, all that are currently supported by Rust) C's size_t is
 // equivalent to Rust's usize
@@ -186,6 +186,7 @@ pub unsafe extern "C" fn lcmh_transform_lcmh_graph_to_cabaliser_graph(
 /// # Returns
 /// - a Box/pointer to the newly created LCMH graph.
 #[unsafe(no_mangle)]
+// pub extern "C" fn lcmh_clone_lcmh_graph(graph: &LcmhGraph) -> Box<LcmhGraph> {
 pub extern "C" fn lcmh_clone_lcmh_graph(graph: &LcmhGraph) -> Box<LcmhGraph> {
     Box::new(graph.clone())
 }
@@ -267,74 +268,128 @@ impl From<LcmhCoolingConfiguration> for CoolingConfiguration {
                 num_steps_per_beta.push(*c.num_steps_per_beta.add(i));
             }
         }
-        CoolingConfiguration {
-            num_betas: c.num_betas,
-            betas,
-            num_steps_per_beta,
-        }
+        CoolingConfiguration { betas, num_steps_per_beta }
     }
 }
 
-/// A struct to hold the local Clifford operations that are performed during the search.
-///
-/// Use [lcmh_free_local_complementation_cliffords] to free the memory allocated for the
-/// operations (don't free `LcmhLocalComplementationCliffords.ops` directly).
+/// Encoding for the local Clifford operations according to the encoding in Cabaliser
+pub type LcmhSingleQubitClifford = u8;
+
 #[repr(C)]
-pub struct LcmhLocalComplementationCliffords {
-    /// The local Clifford operations encoded as in
-    /// `cabaliser/c_lib/lib/instruction_table.h`
-    // (we only use the _R_ and _HSH_ operations, cf. [search::LocalClifford]).
-    pub ops: *mut LocalClifford,
-    /// The number of local Clifford operations.
-    pub length: usize,
-}
-
-impl From<Vec<LocalClifford>> for LcmhLocalComplementationCliffords {
-    fn from(ops: Vec<LocalClifford>) -> Self {
-        let ops_boxed = ManuallyDrop::new(ops.into_boxed_slice());
-        let ops_ptr = ops_boxed.as_ptr() as *mut LocalClifford;
-        let length = ops_boxed.len();
-        LcmhLocalComplementationCliffords { ops: ops_ptr, length }
-    }
-}
-
-impl Drop for LcmhLocalComplementationCliffords {
-    fn drop(&mut self) {
-        if !self.ops.is_null() {
-            unsafe {
-                let _ =
-                    Box::from_raw(ptr::slice_from_raw_parts_mut(self.ops, self.length));
-            }
-        }
-    }
-}
-
-/// Frees the given complementation Cliffords.
-#[unsafe(no_mangle)]
-pub extern "C" fn lcmh_free_local_complementation_cliffords(
-    lc_ops: LcmhLocalComplementationCliffords,
-) {
-    drop(lc_ops);
+#[derive(Debug)]
+pub struct LcmhSingleQubitCliffordOperation {
+    /// The operation that is applied.
+    pub operation: LcmhSingleQubitClifford,
+    /// The node on which the operation is applied.
+    pub node: usize,
 }
 
 /// Collection of search artifacts (apart from the transformed graph) that are returned by
 /// the search functions.
+///
+/// Use [lcmh_free_search_artifacts] to free the memory allocated by the individual
+/// artifact pointers (do not free them manually).
 #[repr(C)]
 pub struct LcmhSearchArtifacts {
     /// The local Clifford operations that do the graph transformation.
-    pub lc_ops: LcmhLocalComplementationCliffords,
-    /// The final cost of the transformed graph (according to the cost function).
-    pub cost: f64,
+    pub local_clifford_ops: *mut LcmhSingleQubitCliffordOperation,
+    pub length_lc_ops: usize,
+    /// The costs of all the intermediate (accepted) graphs.
+    pub costs: *mut f64,
+    pub length_costs: usize,
 }
 
-impl From<SearchArtifacts> for LcmhSearchArtifacts {
-    fn from(artifacts: SearchArtifacts) -> Self {
-        LcmhSearchArtifacts {
-            lc_ops: LcmhLocalComplementationCliffords::from(artifacts.local_clifford_ops),
-            cost: artifacts.cost,
+mod vec_helper {
+    use std::{mem::ManuallyDrop, ptr};
+
+    pub struct VecHelper<T> {
+        ptr: *mut T,
+        length: usize,
+    }
+
+    impl<T> VecHelper<T> {
+        /// # Safety
+        ///
+        /// The given pointer must be valid for `length` elements and must own the memory.
+        pub unsafe fn frow_raw_parts(ptr: *mut T, length: usize) -> Self {
+            VecHelper { ptr, length }
+        }
+
+        pub fn from_vec(vec: Vec<T>) -> Self {
+            let boxed = ManuallyDrop::new(vec.into_boxed_slice());
+            let ptr = boxed.as_ptr() as *mut T;
+            let length = boxed.len();
+            VecHelper { ptr, length }
+        }
+
+        pub fn get_ptr(&self) -> *mut T {
+            self.ptr
+        }
+
+        pub fn get_length(&self) -> usize {
+            self.length
+        }
+    }
+
+    impl<T> Drop for VecHelper<T> {
+        fn drop(&mut self) {
+            if !self.ptr.is_null() {
+                // Safety: both possible creation methods ensure that the pointer is valid
+                // for `length` elements and owns the memory.
+                unsafe {
+                    let _ = Box::from_raw(ptr::slice_from_raw_parts_mut(
+                        self.ptr,
+                        self.length,
+                    ));
+                }
+            }
         }
     }
 }
+use vec_helper::VecHelper;
+
+impl LcmhSearchArtifacts {
+    fn from_artifacts(artifacts: SearchArtifacts) -> Self {
+        let ops = ManuallyDrop::new(VecHelper::from_vec(artifacts.local_clifford_ops));
+        let costs = ManuallyDrop::new(VecHelper::from_vec(artifacts.costs));
+        Self {
+            local_clifford_ops: ops.get_ptr(),
+            length_lc_ops: ops.get_length(),
+            costs: costs.get_ptr(),
+            length_costs: costs.get_length(),
+        }
+    }
+}
+
+impl Drop for LcmhSearchArtifacts {
+    fn drop(&mut self) {
+        // Safety: both possible creation methods ensure that the pointer is valid
+        // for `length` elements and owns the memory.
+        unsafe {
+            let _ =
+                VecHelper::frow_raw_parts(self.local_clifford_ops, self.length_lc_ops);
+            let _ = VecHelper::frow_raw_parts(self.costs, self.length_costs);
+        }
+    }
+}
+
+/// Frees the given search artifacts.
+#[unsafe(no_mangle)]
+pub extern "C" fn lcmh_free_search_artifacts(artifacts: LcmhSearchArtifacts) {
+    drop(artifacts);
+}
+
+/// The cost function (or energy function) in the LCMH search.
+// while the graph should in practice be a `&LcmhGraph`, or rather a `const LcmhGraph *`,
+// I cannot enforce this in the C interface (marking the pointer there with `const` is not
+// really enforced by the compiler); therefore, we have a &mut here
+// EDIT: hah, it does actually seem to enforce it (but it is really easy to get around
+// it...) -> I think it is fine to make it a `&` and `const`; if the function does not
+// guarantee that it is the users fault because the user
+pub type CostFunction =
+    // extern "C" fn(graph: &mut LcmhGraph, num_single_qubit_lc_operations: usize) -> f64;
+    extern "C" fn(graph: &LcmhGraph, num_single_qubit_lc_operations: usize) -> f64;
+
 
 fn opt_seed(seed_from_entropy: bool, seed: u64) -> Option<u64> {
     if seed_from_entropy {
@@ -365,10 +420,7 @@ fn opt_seed(seed_from_entropy: bool, seed: u64) -> Option<u64> {
 pub extern "C" fn lcmh_search(
     graph: &mut LcmhGraph,
     cooling_config: LcmhCoolingConfiguration,
-    cost_function: extern "C" fn(
-        lcmh_graph: *mut LcmhGraph,
-        num_single_qubit_lc_operations: usize,
-    ) -> f64,
+    cost_function: CostFunction,
     seed_from_entropy: bool,
     seed: u64,
 ) -> LcmhSearchArtifacts {
@@ -378,7 +430,7 @@ pub extern "C" fn lcmh_search(
         cost_function,
         opt_seed(seed_from_entropy, seed),
     );
-    LcmhSearchArtifacts::from(artifacts)
+    LcmhSearchArtifacts::from_artifacts(artifacts)
 }
 
 /// Perform the search ...
@@ -401,10 +453,7 @@ unsafe extern "C" fn lcmh_direct_search(
     n_qubits: size_t,
     slices: *mut *mut u64,
     cooling_config: LcmhCoolingConfiguration,
-    cost_function: extern "C" fn(
-        lcmh_graph: *mut LcmhGraph,
-        num_single_qubit_lc_operations: usize,
-    ) -> f64,
+    cost_function: CostFunction,
     seed_from_entropy: bool,
     seed: u64,
     output_slices: *mut *mut u64,
@@ -413,7 +462,6 @@ unsafe extern "C" fn lcmh_direct_search(
     // [CabaliserGraph::new] for
     let c_graph = unsafe { CabaliserGraph::new(n_qubits, slices) };
     let mut graph = CabaliserGraph::to_graph(c_graph);
-    println!("{:?}", graph);
     let artifacts = search::search(
         &mut graph,
         cooling_config.into(),
@@ -423,7 +471,7 @@ unsafe extern "C" fn lcmh_direct_search(
     // Safety: this function assumes the same Safety guarantees `output_slices` as
     // [CabaliserGraph::from_graph] for `graph`
     unsafe { CabaliserGraph::from_graph(&graph, output_slices) };
-    LcmhSearchArtifacts::from(artifacts)
+    LcmhSearchArtifacts::from_artifacts(artifacts)
 }
 
 #[cfg(test)]
