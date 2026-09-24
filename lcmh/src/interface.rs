@@ -380,14 +380,7 @@ pub extern "C" fn lcmh_free_search_artifacts(artifacts: LcmhSearchArtifacts) {
 }
 
 /// The cost function (or energy function) in the LCMH search.
-// while the graph should in practice be a `&LcmhGraph`, or rather a `const LcmhGraph *`,
-// I cannot enforce this in the C interface (marking the pointer there with `const` is not
-// really enforced by the compiler); therefore, we have a &mut here
-// EDIT: hah, it does actually seem to enforce it (but it is really easy to get around
-// it...) -> I think it is fine to make it a `&` and `const`; if the function does not
-// guarantee that it is the users fault because the user
 pub type CostFunction =
-    // extern "C" fn(graph: &mut LcmhGraph, num_single_qubit_lc_operations: usize) -> f64;
     extern "C" fn(graph: &LcmhGraph, num_single_qubit_lc_operations: usize) -> f64;
 
 

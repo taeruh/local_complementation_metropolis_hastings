@@ -1,12 +1,14 @@
 target_directory = target/
 
 lib = lcmh
-lib_directory = ..
-lib_header_path := $(lib_directory)
+lib_directory = ../c_lib
+lib_header_path := $(lib_directory)/include
 lib_path := $(lib_directory)/libs
 
 lib_dynamic = -l$(lib) -Wl,-rpath=$(lib_path)
-lib_static = -Wl,-Bstatic -l$(lib) -Wl,-Bdynamic
+# note the extra -lm at the end for the static linking, because we use exp() in the
+# library which uses the math library
+lib_static = -Wl,-Bstatic -l$(lib) -Wl,-Bdynamic -lm
 
 CXX := clang
 
@@ -19,8 +21,8 @@ LD_LIBRARY_PATH := -L $(lib_path)
 
 CFLAGS := $(err) $(std) $(HEADER_PATH)
 
-# LDLIBS := $(lib_static)
-LDLIBS := $(lib_dynamic)
+LDLIBS := $(lib_static)
+# LDLIBS := $(lib_dynamic)
 LDFLAGS := $(LD_LIBRARY_PATH)
 
 target/main: main.c | $(target_directory)

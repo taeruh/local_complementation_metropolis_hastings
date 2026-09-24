@@ -1,4 +1,4 @@
-use rand::{RngExt, SeedableRng, rngs::SysRng};
+use rand::{RngExt, SeedableRng, distr::StandardUniform, rngs::SysRng};
 use rand_pcg::Pcg64Mcg;
 
 use crate::{
@@ -87,7 +87,10 @@ fn mc_step(
         let new_cost =
             cost_function(graph, artifacts.local_clifford_ops.len() + num_neighbours + 1);
         let delta_cost = new_cost - current_cost;
-        if delta_cost < 0.0 || rng.random::<f64>() < (-beta * delta_cost).exp() {
+        if delta_cost < 0.0
+            || rng.sample::<f64, StandardUniform>(StandardUniform)
+                < (-beta * delta_cost).exp()
+        {
             current_cost = new_cost;
             artifacts.local_clifford_ops.push(LcmhSingleQubitCliffordOperation {
                 node,

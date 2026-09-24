@@ -1,6 +1,6 @@
 libname = lcmh
 
-target_directory = libs
+target_directory = c_lib/libs
 
 libdynamic = lib$(libname).so
 libstatic = lib$(libname).a
