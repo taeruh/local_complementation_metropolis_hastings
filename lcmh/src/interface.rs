@@ -1,13 +1,6 @@
-pub use crate::graph::Graph;
-use crate::search::{
-    self,
-    LocalOperations, // TODO: actually use cabalisers clifford interface
-};
+use std::{mem::ManuallyDrop, ptr};
 
-pub enum VertexSelectionType {
-    Random,
-    Lexicographic,
-}
+use crate::search::{self, CoolingConfiguration, LocalClifford, SearchArtifacts};
 
 // On most platforms (appartly, all that are currently supported by Rust) C's size_t is
 // equivalent to Rust's usize
@@ -15,184 +8,426 @@ pub enum VertexSelectionType {
 #[allow(non_camel_case_types)]
 type size_t = usize;
 
-const CHUNK_SIZE: usize = 64;
+mod graph_transformation {
+    use std::ops::BitOrAssign;
 
-struct CabaliserGraph {
-    n_qubits: size_t,
-    // the graph is stored as adjacency matrix; the matrix is stored as single bit-vector,
-    // however, access to it is given via these slices, where each slice corresponds to a
-    // row of the adjacency matrix and via the slice entries one access the individual
-    // 64-bit chunks of the row
-    slices: *mut *mut u64,
-}
+    use super::size_t;
+    use crate::graph::Graph;
 
-impl CabaliserGraph {
-    /// # Safety
-    /// The slice(s) must be valid for reads of `n_qubits`
-    unsafe fn to_graph(c_graph: CabaliserGraph) -> Graph {
-        if c_graph.n_qubits == 0 {
-            return Graph::new(0);
+    const CHUNK_SIZE: usize = 64;
+
+    /// A helper struct to access that graph data structure as they are represented in
+    /// Cabaliser.
+    pub struct CabaliserGraph {
+        n_qubits: size_t,
+        // do not wrap (the outer) pointer into a &ref because this requires quite a few
+        // guarantees that I don't want to enforce here for simplicity.
+        slices: *mut *mut u64,
+    }
+
+    impl CabaliserGraph {
+        /// Creates a new CabaliserGraph, cf.
+        /// [lcmh_transform_cabaliser_graph_to_lcmh_graph](super::lcmh_transform_cabaliser_graph_to_lcmh_graph).
+        ///
+        /// # Safety
+        /// `slices` must be initialised for `n_qubits` and each slice `slices[i]`
+        /// must again be valid for `n_qubits`.
+        pub unsafe fn new(n_qubits: size_t, slices: *mut *mut u64) -> Self {
+            CabaliserGraph { n_qubits, slices }
         }
 
-        let num_chunks = c_graph.n_qubits.div_ceil(CHUNK_SIZE);
-        let last_chunk_idx = num_chunks - 1;
-        let max_bit_in_last_chunk = (c_graph.n_qubits - 1) % CHUNK_SIZE;
-        let mut graph = Graph::new(c_graph.n_qubits);
+        /// Builds a [Graph] from the given [CabaliserGraph].
+        pub fn to_graph(c_graph: CabaliserGraph) -> Graph {
+            if c_graph.n_qubits == 0 {
+                return Graph::new(0);
+            }
 
-        let mut potentially_add_edge =
-            |chunk: u64, chunk_idx: usize, i: usize, j: usize| {
-                if (chunk & (1 << j)) != 0 {
-                    graph.add_edge(i, chunk_idx * CHUNK_SIZE + j);
+            let num_chunks = c_graph.n_qubits.div_ceil(CHUNK_SIZE);
+            // note (for below) that this index points to the last chunk of all the
+            // rows which is initialised as [Self::new] guarantees that
+            let last_chunk_idx = num_chunks - 1;
+            let max_bit_in_last_chunk = (c_graph.n_qubits - 1) % CHUNK_SIZE;
+            let mut graph = Graph::new(c_graph.n_qubits);
+
+            let mut potentially_add_edge =
+                |chunk: u64, chunk_idx: usize, i: usize, j: usize| {
+                    if (chunk & (1 << j)) != 0 {
+                        graph.add_edge(i, chunk_idx * CHUNK_SIZE + j);
+                    }
+                };
+
+            for i in 0..(c_graph.n_qubits - 1) {
+                // Safety: we have i < n_qubits - 1 <= n_qubits - 1
+                let slice = unsafe { *c_graph.slices.add(i) };
+                let start_j = i + 1;
+                let current_chunk_idx = start_j / CHUNK_SIZE;
+                if current_chunk_idx != num_chunks - 1 {
+                    // Safety: we have current_chunk_idx = (i + 1) / CHUNK_SIZE <=
+                    // (n_qubits - 1) / CHUNK_SIZE = num_chunks - 1 = last_chunk_idx,
+                    // which is a valid index
+                    let chunk = unsafe { *slice.add(current_chunk_idx) };
+                    for j in start_j..CHUNK_SIZE {
+                        potentially_add_edge(chunk, current_chunk_idx, i, j);
+                    }
                 }
+                for chunk_idx in (current_chunk_idx + 1)..(num_chunks - 1) {
+                    // Safety: we have chunk_idx < num_chunks - 1 = last_chunk_idx, which
+                    // is a valid index
+                    let chunk = unsafe { *slice.add(chunk_idx) };
+                    for j in 0..CHUNK_SIZE {
+                        potentially_add_edge(chunk, chunk_idx, i, j);
+                    }
+                }
+                // Safety: last_chunk_idx is a valid index
+                let chunk = unsafe { *slice.add(last_chunk_idx) };
+                for j in (start_j % CHUNK_SIZE)..(max_bit_in_last_chunk + 1) {
+                    potentially_add_edge(chunk, last_chunk_idx, i, j);
+                }
+            }
+
+            graph
+        }
+
+        /// Writes the given [Graph] into the given `slices_buffer` that is assumed to be
+        /// initalised with zeros.
+        ///
+        /// # Safety
+        /// `slices_buffer` must be valid for `graph.num_nodes()` and each slice
+        /// `slices_buffer[i]` must again be valid for `graph.num_nodes()`.
+        pub unsafe fn from_graph(
+            graph: &Graph,
+            slices_buffer: *mut *mut u64,
+        ) -> CabaliserGraph {
+            let c_graph = CabaliserGraph {
+                n_qubits: graph.num_nodes(),
+                slices: slices_buffer,
             };
-
-        for i in 0..(c_graph.n_qubits - 1) {
-            let slice = unsafe { *c_graph.slices.add(i) };
-            let start_j = i + 1;
-            let current_chunk_idx = start_j / CHUNK_SIZE;
-            if current_chunk_idx != num_chunks - 1 {
-                let chunk = unsafe { *slice.add(current_chunk_idx) };
-                for j in start_j..CHUNK_SIZE {
-                    potentially_add_edge(chunk, current_chunk_idx, i, j);
+            for i in 0..graph.num_nodes() {
+                // Safety: we have i < graph.num_nodes() <= graph.num_nodes - 1, which is
+                // a valid index
+                let slice = unsafe { *slices_buffer.add(i) };
+                for &neighbour in graph.get_neighbours(i).unwrap() {
+                    // Safety: we have neighbour / CHUNK_SIZE < graph.num_nodes() /
+                    // CHUNK_SIZE <= num_chunks - 1 = last_chunk_idx, which is a valid
+                    // index
+                    let chunk = unsafe { &mut *slice.add(neighbour / CHUNK_SIZE) };
+                    chunk.bitor_assign(1 << (neighbour % CHUNK_SIZE))
                 }
             }
-            for chunk_idx in (current_chunk_idx + 1)..(num_chunks - 1) {
-                let chunk = unsafe { *slice.add(chunk_idx) };
-                for j in 0..CHUNK_SIZE {
-                    potentially_add_edge(chunk, chunk_idx, i, j);
-                }
-            }
-            let chunk = unsafe { *slice.add(last_chunk_idx) };
-            for j in (start_j % CHUNK_SIZE)..(max_bit_in_last_chunk + 1) {
-                potentially_add_edge(chunk, last_chunk_idx, i, j);
-            }
+            c_graph
         }
-
-        graph
-    }
-
-    unsafe fn from_graph(
-        graph: &Graph,
-        // need to be valid for `graph.num_nodes()` and initialised to zeros
-        slices_buffer: *mut *mut u64,
-    ) -> CabaliserGraph {
-        let c_graph = CabaliserGraph {
-            n_qubits: graph.num_nodes(),
-            slices: slices_buffer,
-        };
-        for i in 0..graph.num_nodes() {
-            let slice = unsafe { *slices_buffer.add(i) };
-            for &neighbour in graph.get_neighbours(i).unwrap() {
-                unsafe {
-                    *slice.add(neighbour / CHUNK_SIZE) |= 1 << (neighbour % CHUNK_SIZE);
-                }
-            }
-        }
-        c_graph
     }
 }
 
-#[repr(C)]
-struct SearchArtifacts {
-    // ...
-}
+use graph_transformation::CabaliserGraph;
 
+/// The graph encoding we use for the LCMH search.
+pub type LcmhGraph = crate::graph::Graph;
+
+/// Transforms a Cabaliser graph into an LCMH graph.
+///
+/// Creates a new LCMH from the given number of qubits, `n_qubits` and
+/// the backing memory of the graph that is accessed via the `slices`. It is
+/// assumed that the graph is stored as a binary adjacency matrix, where each row
+/// can be accessed via the `slices` pointer, and each row-pointer then points to
+/// the 64-bit chunks that encode the row.
+///
+/// # Arguments
+/// - `n_qubits`: The number of qubits/nodes in the graph.
+/// - `slices`: A pointer to the backing memory of the graph
+///
+/// # Returns
+/// - a Box/pointer to the newly created LCMH graph.
+///
+/// # Safety
+/// `slices` must be initialised for `n_qubits` and each slice `slices[i]`
+/// must again be valid for `n_qubits`.
 #[unsafe(no_mangle)]
-unsafe extern "C" fn direct_search(
+pub unsafe extern "C" fn lcmh_transform_cabaliser_graph_to_lcmh_graph(
     n_qubits: size_t,
     slices: *mut *mut u64,
-    num_steps: usize,
-    cost_function: extern "C" fn(
-        num_vertices: usize,
-        num_edges: usize,
-        max_degree: usize,
-        num_executed_lcs: usize,
-    ) -> f64,
-    // must be valid for `n_qubits` and initialised to zeros
-    output_slices: *mut *mut u64,
-) -> SearchArtifacts {
-    let c_graph = CabaliserGraph { n_qubits, slices };
-    let mut graph = unsafe { CabaliserGraph::to_graph(c_graph) };
-    let (ops, num_edges, max_degree, cost) =
-        search::search(&mut graph, num_steps, cost_function);
-    unsafe { CabaliserGraph::from_graph(&graph, output_slices) };
-    SearchArtifacts {
-        // ...
-    }
+) -> Box<LcmhGraph> {
+    let c_graph = unsafe { CabaliserGraph::new(n_qubits, slices) };
+    Box::new(CabaliserGraph::to_graph(c_graph))
 }
 
-#[repr(C)]
-struct LcmhGraph {
-    graph: *mut Graph,
-}
-
-impl LcmhGraph {
-    fn new(graph: Graph) -> Self {
-        let boxed_graph = Box::new(graph);
-        let graph_ptr = Box::into_raw(boxed_graph);
-        LcmhGraph { graph: graph_ptr }
-    }
-
-    fn get_graph(&self) -> &Graph {
-        unsafe { &*self.graph }
-    }
-
-    fn get_graph_mut(&mut self) -> &mut Graph {
-        unsafe { &mut *self.graph }
-    }
-}
-
-impl Drop for LcmhGraph {
-    fn drop(&mut self) {
-        unsafe {
-            drop(Box::from_raw(self.graph));
-        }
-    }
-}
-
+/// Transforms an LCMH graph into a Cabaliser graph.
+///
+/// Creates a new Cabaliser graph from the given LCMH graph and writing into a backing
+/// memory accessed via the `slices_buffer`, assuming that the buffer is initialised with
+/// zeros; cf. [lcmh_transform_cabaliser_graph_to_lcmh_graph] for the encoding.
+///
+/// # Arguments
+/// - `graph`: The LCMH graph to be transformed.
+/// - `slices_buffer`: A pointer to the buffer memory where the Cabaliser graph will be
+///   written to.
+///
+/// # Returns
+/// - the number of nodes/qubits in the graph.
+///
+/// # Safety
+/// `slices_buffer` must be valid for `graph.num_nodes()` and each slice
+/// `slices_buffer[i]` must again be valid for `graph.num_nodes()`.
 #[unsafe(no_mangle)]
-unsafe extern "C" fn transform_cabaliser_graph_to_lcmh_graph(
-    n_qubits: size_t,
-    slices: *mut *mut u64,
-) -> LcmhGraph {
-    let c_graph = CabaliserGraph { n_qubits, slices };
-    LcmhGraph::new(unsafe { CabaliserGraph::to_graph(c_graph) })
-}
-
-#[unsafe(no_mangle)]
-unsafe extern "C" fn transform_lcmh_graph_to_cabaliser_graph(
+pub unsafe extern "C" fn lcmh_transform_lcmh_graph_to_cabaliser_graph(
     graph: &LcmhGraph,
     // must be valid for `graph.num_nodes()` and initialised to zeros
     slices_buffer: *mut *mut u64,
-) {
-    let graph = graph.get_graph();
+) -> size_t {
     unsafe { CabaliserGraph::from_graph(graph, slices_buffer) };
+    graph.num_nodes()
 }
 
+/// Clones the given LCMH graph.
+///
+/// # Arguments
+/// - `graph`: The LCMH graph to be cloned.
+///
+/// # Returns
+/// - a Box/pointer to the newly created LCMH graph.
 #[unsafe(no_mangle)]
-extern "C" fn clone_lcmh_graph(graph: &LcmhGraph) -> LcmhGraph {
-    LcmhGraph::new(graph.get_graph().clone())
+pub extern "C" fn lcmh_clone_lcmh_graph(graph: &LcmhGraph) -> Box<LcmhGraph> {
+    Box::new(graph.clone())
 }
 
+/// Frees the given LCMH graph.
+///
+/// # Arguments
+/// - `graph`: The LCMH graph to be freed.
 #[unsafe(no_mangle)]
-extern "C" fn free_lcmh_graph(graph: LcmhGraph) {
+pub extern "C" fn lcmh_free_lcmh_graph(graph: Box<LcmhGraph>) {
     drop(graph);
 }
 
+/// Get the number of nodes in the given LCMH graph.
+///
+/// # Arguments
+/// - `graph`: The LCMH graph.
+///
+/// # Returns
+/// - the number of nodes in the graph.
 #[unsafe(no_mangle)]
-extern "C" fn search(
-    graph: &mut LcmhGraph,
-    num_steps: usize,
-    cost_function: extern "C" fn(
-        num_vertices: usize,
-        num_edges: usize,
-        max_degree: usize,
-        num_executed_lcs: usize,
-    ) -> f64,
-) -> SearchArtifacts {
-    let (ops, num_edges, max_degree, cost) =
-        search::search(graph.get_graph_mut(), num_steps, cost_function);
-    SearchArtifacts {
-        // ...
+pub extern "C" fn lcmh_get_num_edges(graph: &LcmhGraph) -> size_t {
+    graph.num_edges()
+}
+
+/// Get the maximum degree of the given LCMH graph.
+///
+/// # Arguments
+/// - `graph`: The LCMH graph.
+///
+/// # Returns
+/// - the maximum degree of the graph.
+#[unsafe(no_mangle)]
+pub extern "C" fn lcmh_get_max_degree(graph: &LcmhGraph) -> size_t {
+    graph.max_degree()
+}
+
+/// Get the number of neighbours of the given node in the given LCMH graph.
+///
+/// # Arguments
+/// - `graph`: The LCMH graph.
+/// - `node`: The node for which to get the number of neighbours.
+///
+/// # Returns
+/// - the number of neighbours of the node.
+#[unsafe(no_mangle)]
+pub extern "C" fn lcmh_get_nodes_num_neighbours(
+    graph: &LcmhGraph,
+    node: size_t,
+) -> size_t {
+    graph.get_neighbours(node).expect("Node not in graph").len()
+}
+
+/// The cooling configuration for the search.
+///
+/// # Invariants
+///
+/// `num_betas` must be equal to the length of `betas` and `num_steps_per_beta`.
+#[repr(C)]
+pub struct LcmhCoolingConfiguration {
+    /// The number of betas.
+    pub num_betas: usize,
+    /// The betas.
+    pub betas: *mut f64,
+    /// The number of "steps" per beta. Note that each "step" consists of
+    /// `graph.num_nodes()` local complementation draws (not necessarily accepted).
+    pub num_steps_per_beta: *mut usize,
+}
+
+impl From<LcmhCoolingConfiguration> for CoolingConfiguration {
+    fn from(c: LcmhCoolingConfiguration) -> Self {
+        let mut betas = Vec::with_capacity(c.num_betas);
+        let mut num_steps_per_beta = Vec::with_capacity(c.num_betas);
+        for i in 0..c.num_betas {
+            // Safety: we have i < c.num_betas <= c.num_betas, which is a valid index
+            // according to the invariants of [LcmhCoolingConfiguration].
+            unsafe {
+                betas.push(*c.betas.add(i));
+                num_steps_per_beta.push(*c.num_steps_per_beta.add(i));
+            }
+        }
+        CoolingConfiguration {
+            num_betas: c.num_betas,
+            betas,
+            num_steps_per_beta,
+        }
     }
+}
+
+/// A struct to hold the local Clifford operations that are performed during the search.
+///
+/// Use [lcmh_free_local_complementation_cliffords] to free the memory allocated for the
+/// operations (don't free `LcmhLocalComplementationCliffords.ops` directly).
+#[repr(C)]
+pub struct LcmhLocalComplementationCliffords {
+    /// The local Clifford operations encoded as in
+    /// `cabaliser/c_lib/lib/instruction_table.h`
+    // (we only use the _R_ and _HSH_ operations, cf. [search::LocalClifford]).
+    pub ops: *mut LocalClifford,
+    /// The number of local Clifford operations.
+    pub length: usize,
+}
+
+impl From<Vec<LocalClifford>> for LcmhLocalComplementationCliffords {
+    fn from(ops: Vec<LocalClifford>) -> Self {
+        let ops_boxed = ManuallyDrop::new(ops.into_boxed_slice());
+        let ops_ptr = ops_boxed.as_ptr() as *mut LocalClifford;
+        let length = ops_boxed.len();
+        LcmhLocalComplementationCliffords { ops: ops_ptr, length }
+    }
+}
+
+impl Drop for LcmhLocalComplementationCliffords {
+    fn drop(&mut self) {
+        if !self.ops.is_null() {
+            unsafe {
+                let _ =
+                    Box::from_raw(ptr::slice_from_raw_parts_mut(self.ops, self.length));
+            }
+        }
+    }
+}
+
+/// Frees the given complementation Cliffords.
+#[unsafe(no_mangle)]
+pub extern "C" fn lcmh_free_local_complementation_cliffords(
+    lc_ops: LcmhLocalComplementationCliffords,
+) {
+    drop(lc_ops);
+}
+
+/// Collection of search artifacts (apart from the transformed graph) that are returned by
+/// the search functions.
+#[repr(C)]
+pub struct LcmhSearchArtifacts {
+    /// The local Clifford operations that do the graph transformation.
+    pub lc_ops: LcmhLocalComplementationCliffords,
+    /// The final cost of the transformed graph (according to the cost function).
+    pub cost: f64,
+}
+
+impl From<SearchArtifacts> for LcmhSearchArtifacts {
+    fn from(artifacts: SearchArtifacts) -> Self {
+        LcmhSearchArtifacts {
+            lc_ops: LcmhLocalComplementationCliffords::from(artifacts.local_clifford_ops),
+            cost: artifacts.cost,
+        }
+    }
+}
+
+fn opt_seed(seed_from_entropy: bool, seed: u64) -> Option<u64> {
+    if seed_from_entropy {
+        None
+    } else {
+        Some(seed)
+    }
+}
+
+/// Performs the search changing the graph in-place.
+///
+/// ...
+///
+/// # Arguments
+/// - `graph`: The LCMH graph to be transformed.
+/// - `cooling_config`: The cooling configuration that is used to control the search.
+/// - `cost_function`: The cost function (or energy function) that is used to evaluate the
+///   quality of the proposed graph. It gets passed the the proposed graph and the total
+///   number of single-qubit Clifford gates that have been applied so far (including the
+///   proposed step).
+/// - `seed_from_entropy`: If true, the random number generator is seeded from entropy.
+/// - `seed`: If `seed_from_entropy` is false, the random number generator is seeded with
+///   this value.
+///
+/// # Returns
+/// - Additional artifacts from the search.
+#[unsafe(no_mangle)]
+pub extern "C" fn lcmh_search(
+    graph: &mut LcmhGraph,
+    cooling_config: LcmhCoolingConfiguration,
+    cost_function: extern "C" fn(
+        lcmh_graph: *mut LcmhGraph,
+        num_single_qubit_lc_operations: usize,
+    ) -> f64,
+    seed_from_entropy: bool,
+    seed: u64,
+) -> LcmhSearchArtifacts {
+    let artifacts = search::search(
+        graph,
+        cooling_config.into(),
+        cost_function,
+        opt_seed(seed_from_entropy, seed),
+    );
+    LcmhSearchArtifacts::from(artifacts)
+}
+
+/// Perform the search ...
+///
+/// The input graph is encoded in the `slices`, cf.
+/// [lcmh_transform_cabaliser_graph_to_lcmh_graph].
+///
+/// # Arguments
+/// ...
+///
+/// # Returns
+/// ...
+///
+/// # Safety
+/// `slices` must be initialised for `n_qubits` and each slice `slices[i]` must again be
+/// valid for `n_qubits`. Similarly, `output_slices` must be valid for `n_qubits` and each
+/// slice `output_slices[i]` must again be valid for `n_qubits`.
+#[unsafe(no_mangle)]
+unsafe extern "C" fn lcmh_direct_search(
+    n_qubits: size_t,
+    slices: *mut *mut u64,
+    cooling_config: LcmhCoolingConfiguration,
+    cost_function: extern "C" fn(
+        lcmh_graph: *mut LcmhGraph,
+        num_single_qubit_lc_operations: usize,
+    ) -> f64,
+    seed_from_entropy: bool,
+    seed: u64,
+    output_slices: *mut *mut u64,
+) -> LcmhSearchArtifacts {
+    // Safety: this function assumes the same Safety guarantees `slices` as
+    // [CabaliserGraph::new] for
+    let c_graph = unsafe { CabaliserGraph::new(n_qubits, slices) };
+    let mut graph = CabaliserGraph::to_graph(c_graph);
+    println!("{:?}", graph);
+    let artifacts = search::search(
+        &mut graph,
+        cooling_config.into(),
+        cost_function,
+        opt_seed(seed_from_entropy, seed),
+    );
+    // Safety: this function assumes the same Safety guarantees `output_slices` as
+    // [CabaliserGraph::from_graph] for `graph`
+    unsafe { CabaliserGraph::from_graph(&graph, output_slices) };
+    LcmhSearchArtifacts::from(artifacts)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test() {}
 }
