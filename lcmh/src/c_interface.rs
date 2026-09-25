@@ -382,7 +382,7 @@ pub extern "C" fn lcmh_free_search_artifacts(artifacts: LcmhSearchArtifacts) {
 }
 
 /// The cost function (or energy function) in the LCMH search.
-pub type CostFunction =
+pub type LcmhCostFunction =
     extern "C" fn(graph: &LcmhGraph, num_single_qubit_lc_operations: usize) -> f64;
 
 fn opt_seed(seed_from_entropy: bool, seed: u64) -> Option<u64> {
@@ -414,7 +414,7 @@ fn opt_seed(seed_from_entropy: bool, seed: u64) -> Option<u64> {
 pub extern "C" fn lcmh_search(
     graph: &mut LcmhGraph,
     cooling_config: LcmhCoolingConfiguration,
-    cost_function: CostFunction,
+    cost_function: LcmhCostFunction,
     seed_from_entropy: bool,
     seed: u64,
 ) -> LcmhSearchArtifacts {
@@ -447,7 +447,7 @@ unsafe extern "C" fn lcmh_direct_search(
     n_qubits: size_t,
     slices: *mut *mut u64,
     cooling_config: LcmhCoolingConfiguration,
-    cost_function: CostFunction,
+    cost_function: LcmhCostFunction,
     seed_from_entropy: bool,
     seed: u64,
     output_slices: *mut *mut u64,

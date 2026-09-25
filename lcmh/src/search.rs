@@ -3,7 +3,7 @@ use rand_pcg::Pcg64Mcg;
 
 use crate::{
     graph::Graph,
-    c_interface::{CostFunction, LcmhSingleQubitCliffordOperation},
+    c_interface::{LcmhCostFunction, LcmhSingleQubitCliffordOperation},
 };
 
 // the local complementation cliffords are S^3 and HSH; in cababliser we have the _R_ =
@@ -32,7 +32,7 @@ pub struct SearchArtifacts {
 pub fn search(
     graph: &mut Graph,
     cooling_config: CoolingConfiguration,
-    cost_function: CostFunction,
+    cost_function: LcmhCostFunction,
     seed: Option<u64>,
 ) -> SearchArtifacts {
     let mut rng = match seed {
@@ -73,7 +73,7 @@ pub fn search(
 
 fn mc_step(
     graph: &mut Graph,
-    cost_function: CostFunction,
+    cost_function: LcmhCostFunction,
     beta: f64,
     mut current_cost: f64,
     artifacts: &mut SearchArtifacts,

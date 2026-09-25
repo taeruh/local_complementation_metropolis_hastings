@@ -49,15 +49,15 @@ typedef struct LcmhSearchArtifacts LcmhSearchArtifacts;
 
 void lcmh_free_search_artifacts(LcmhSearchArtifacts artifacts);
 
-typedef double (*CostFunction)(const LcmhGraph *graph, size_t num_executed_lcs);
+typedef double (*LcmhCostFunction)(const LcmhGraph *graph, size_t num_executed_lcs);
 
 LcmhSearchArtifacts lcmh_search(LcmhGraph *graph,
                                 LcmhCoolingConfiguration cooling_config,
-                                CostFunction cost_function,
+                                LcmhCostFunction cost_function,
                                 int seed_from_entropy, uint64_t seed);
 
 LcmhSearchArtifacts lcmh_direct_search(size_t n_qubits, uint64_t **slices,
                                        LcmhCoolingConfiguration cooling_config,
-                                       CostFunction cost_function,
+                                       LcmhCostFunction cost_function,
                                        int seed_from_entropy, uint64_t seed,
                                        uint64_t **output_slices);
