@@ -1,4 +1,4 @@
-# A Metropolis-Hastings Search on Local Complementations of a Graph
+# A Metropolis-Hastings Search on the Local Complementations of a Graph
 
 A Metropolis-Hastings (MH) search through the space of local complementations (LC) of a
 graph(state). The goal is to integrate this into Cabaliser.
@@ -51,7 +51,9 @@ I have not done thorough testing yet, so there are probably bugs.
   `./lcmh/src/clifford_stack.rs`).
 - Document what things have to be "freed".
 - Do some testing.
-- Anything else that you think is needed.
+- Anything else that we'll need to integrate this into Cabaliser or have more
+  sophisticated cost functions (e.g., expose more methods on the graph that can be used in
+  the cost function).
 
 ## License
 
