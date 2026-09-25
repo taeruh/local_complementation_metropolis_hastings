@@ -9,12 +9,14 @@
 #define CHUNK_SIZE sizeof(CHUNK_OBJ)
 #define NUM_CHUNKS_PER_ROW(n_qubits) ((n_qubits + CHUNK_SIZE - 1) / CHUNK_SIZE)
 
+// this is basically what we get from cabaliser
 struct PseudoCabaliserGraph {
   size_t n_qubits;
-  uint64_t **slices;
+  uint64_t **slices; // adjacency matrix
 };
 typedef struct PseudoCabaliserGraph PseudoCabaliserGraph;
 
+// set everything to zero 
 void flush_slices(size_t n_qubits, uint64_t *slices_mem) {
   size_t num_chunks = NUM_CHUNKS_PER_ROW(n_qubits) * n_qubits;
   for (size_t i = 0; i < num_chunks; i++) {
@@ -22,6 +24,7 @@ void flush_slices(size_t n_qubits, uint64_t *slices_mem) {
   }
 }
 
+// initialise a pseudo cabaliser graph initialised to zero (i.e., no edges)
 PseudoCabaliserGraph create_pseudo_cabaliser_graph(size_t n_qubits) {
   size_t num_chunks_per_row = NUM_CHUNKS_PER_ROW(n_qubits);
   uint64_t *slices_mem = malloc(n_qubits * num_chunks_per_row * CHUNK_SIZE);
@@ -51,6 +54,10 @@ void print_adj_matrix(size_t n_qubits, uint64_t **slices) {
   }
 }
 
+// this here will be the most important bit; the cost function that decides how good a
+// graph is (the lower the cost, the better); this here is just a simple example, assuming
+// that single qubits cliffords are 1/100th of the cost of an edge (CZ operator) and all
+// we care about is the sum of those costs
 double cost_function(const LcmhGraph *graph, size_t num_ops) {
   return (double)(lcmh_get_num_edges(graph)) + (double)(num_ops) * 0.01;
 }
@@ -61,16 +68,23 @@ int main(void) {
   // assume the following is actually a graph coming from cabaliser, i.e.,
   // tableau_t.n_qubits and tableau_t.slices_x {{
   PseudoCabaliserGraph input_graph = create_pseudo_cabaliser_graph(5);
+  // create some edges (there is a better way to do this:
+  // edge (0, 1)
   input_graph.slices[0][0] |= 1ull << 1;
   input_graph.slices[1][0] |= 1ull << 0;
+  // edge (0, 4)
   input_graph.slices[0][0] |= 1ull << 4;
   input_graph.slices[4][0] |= 1ull << 0;
+  // edge (1, 2)
   input_graph.slices[1][0] |= 1ull << 2;
   input_graph.slices[2][0] |= 1ull << 1;
+  // edge (1, 3)
   input_graph.slices[1][0] |= 1ull << 3;
   input_graph.slices[3][0] |= 1ull << 1;
+  // edge (2, 4)
   input_graph.slices[2][0] |= 1ull << 4;
   input_graph.slices[4][0] |= 1ull << 2;
+  // edge (3, 4)
   input_graph.slices[3][0] |= 1ull << 4;
   input_graph.slices[4][0] |= 1ull << 3;
   // }}

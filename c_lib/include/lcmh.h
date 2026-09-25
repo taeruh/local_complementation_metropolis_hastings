@@ -1,5 +1,5 @@
 // The documentation is missing here for now; however, if you run `cargo doc` in
-// the lcmh directory and open `lcmh/target/doc/lcmh/interface/index.html` in
+// the lcmh directory and open `lcmh/target/doc/lcmh/c_interface/index.html` in
 // your browser, you'll find the according documentation there.
 
 #include <stddef.h>

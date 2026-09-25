@@ -9,7 +9,7 @@ dest_libdynamic = $(target_directory)/$(libdynamic)
 dest_libstatic = $(target_directory)/$(libstatic)
 
 rust_directory = ./lcmh
-rust_build_directory = $(rust_directory)/target/debug
+rust_build_directory = $(rust_directory)/target/release
 orig_libdynamic = $(rust_build_directory)/$(libdynamic)
 orig_libstatic = $(rust_build_directory)/$(libstatic)
 rust_source_files = $(wildcard $(rust_directory)/src/*.rs)
@@ -24,10 +24,10 @@ $(dest_libstatic): $(orig_libstatic) | $(target_directory)
 	cp $< $@
 
 $(orig_libdynamic): $(rust_source_files)
-	cd $(rust_directory); cargo build
+	cd $(rust_directory); cargo build --release
 
 $(origi_libstatic): $(rust_source_files)
-	cd $(rust_directory); cargo build
+	cd $(rust_directory); cargo build --release
 
 $(target_directory):
 	mkdir -p $@

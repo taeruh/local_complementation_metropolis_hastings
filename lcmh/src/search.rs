@@ -3,13 +3,13 @@ use rand_pcg::Pcg64Mcg;
 
 use crate::{
     graph::Graph,
-    interface::{CostFunction, LcmhSingleQubitCliffordOperation},
+    c_interface::{CostFunction, LcmhSingleQubitCliffordOperation},
 };
 
 // the local complementation cliffords are S^3 and HSH; in cababliser we have the _R_ =
 // _S__Z_, as well as _HSH_ therefore, S^3 -> _R_ and HSH -> _HSH_
 mod clifford_ops {
-    use crate::interface::LcmhSingleQubitClifford;
+    use crate::c_interface::LcmhSingleQubitClifford;
 
     const LOCAL_CLIFFORD_MASK: LcmhSingleQubitClifford = 1 << 5;
     const _R_: LcmhSingleQubitClifford = 0x06 | LOCAL_CLIFFORD_MASK;
@@ -119,7 +119,7 @@ mod tests {
         graph: &Graph,
         _num_single_qubit_lc_operations: usize,
     ) -> f64 {
-        use crate::interface::lcmh_get_num_edges;
+        use crate::c_interface::lcmh_get_num_edges;
         lcmh_get_num_edges(graph) as f64
     }
 
