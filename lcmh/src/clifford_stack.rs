@@ -36,15 +36,15 @@ impl Pauli {
     const X: Pauli = Pauli(2);
     const Y: Pauli = Pauli(3);
 
-    const fn multiply(&mut self, other: Self) {
+    fn multiply(&mut self, other: Self) {
         self.0 ^= other.0;
     }
 
-    const fn conj_s(&mut self) {
+    fn conj_s(&mut self) {
         self.0 ^= (self.0 & 2) >> 1;
     }
 
-    const fn conj_hsh(&mut self) {
+    fn conj_hsh(&mut self) {
         self.0 ^= (self.0 & 1) << 1;
     }
 }
