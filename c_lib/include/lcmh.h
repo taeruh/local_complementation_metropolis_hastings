@@ -1,6 +1,14 @@
 // The documentation is missing here for now; however, if you run `cargo doc` in
 // the lcmh directory and open `lcmh/target/doc/lcmh/c_interface/index.html` in
-// your browser, you'll find the according documentation there.
+// your browser, you'll find the according documentation there. However, with Rust syntax
+// instead of C syntax; the pointers translate as follows:
+// - `const T *`: `&T` or `*const T`
+// - `T *`: `Box<T>`, `&mut T` or `*mut T`
+// the integer types as:
+// - `size_t`: `usize`
+// - `uint<N>_t`: `u<N>`
+// and the floating point types as:
+// - `double`: `f64`
 
 #include <stddef.h>
 #include <stdint.h>

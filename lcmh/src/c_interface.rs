@@ -134,6 +134,9 @@ mod graph_transformation {
 use graph_transformation::CabaliserGraph;
 
 /// The graph encoding we use for the LCMH search.
+///
+/// # Garbage collection
+/// Use [lcmh_free_lcmh_graph] to free the according memory.
 pub type LcmhGraph = crate::graph::Graph;
 
 /// Transforms a Cabaliser graph into an LCMH graph.
@@ -298,9 +301,9 @@ pub struct LcmhSingleQubitCliffordOperation {
 
 /// Collection of search artifacts (apart from the transformed graph) that are returned by
 /// the search functions.
-///
-/// Use [lcmh_free_search_artifacts] to free the memory allocated by the individual
-/// artifact pointers (do not free them manually).
+/// 
+/// # Garbage collection
+/// Use [lcmh_free_search_artifacts] to free the according memory.
 // TODO: Probably change this here to an analogous version of [SearchArtifacts] which uses
 // one vector per node (depending on how we want to use it in cababliser).
 #[repr(C)]
@@ -323,7 +326,6 @@ mod vec_helper {
 
     impl<T> VecHelper<T> {
         /// # Safety
-        ///
         /// The given pointer must be valid for `length` elements and must own the memory.
         pub unsafe fn frow_raw_parts(ptr: *mut T, length: usize) -> Self {
             VecHelper { ptr, length }
@@ -404,10 +406,11 @@ pub extern "C" fn lcmh_free_search_artifacts(artifacts: LcmhSearchArtifacts) {
     drop(artifacts);
 }
 
-/// The cost function (or energy function) in the LCMH search. There are functions to get
-/// data from the graph, e.g. [lcmh_get_num_edges]. `num_single_qubit_lc_operations` is
-/// currently not exact but overcounts the exact number of single-qubit Clifford
-/// operations by up to one identity operation per node.
+/// The cost function (or energy function) in the LCMH search.
+///
+/// There are functions to get data from the graph, e.g. [lcmh_get_num_edges].
+/// `num_single_qubit_lc_operations` is currently not exact but overcounts the exact
+/// number of single-qubit Clifford operations by up to one identity operation per node.
 pub type LcmhCostFunction =
     extern "C" fn(graph: &LcmhGraph, num_single_qubit_lc_operations: usize) -> f64;
 

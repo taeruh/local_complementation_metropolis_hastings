@@ -35,10 +35,8 @@ be located in `./c_lib/libs/`. This requires a Rust toolchain to be installed.
 ## Documentation and Examples
 
 - The documentation in the header file is currently missing, however, most of it already
-  exists (and has just not been copied over yet): Run `cargo doc` in `./lcmh/` to generate
-  `lcmh/target/doc/lcmh/c_interface/index.html` and view it in a browser. The functions
-  and structs there are the same as the ones in the header files, but with Rust syntax
-  instead of C syntax.
+  exists (and has just not been copied over yet). See the comment at the top in
+  `./c_lib/include/lcmh.h` for more information on how to get the documentation.
 - There is an example in `./examples/` that shows its intended usage.
 
 ## Testing and Bugs
@@ -47,7 +45,6 @@ I have not done thorough testing yet, so there are probably bugs.
 
 ## Near-Future Work
 
-- Document what things have to be "freed".
 - Do some testing.
 - Anything else that we'll need to integrate this into Cabaliser or have more
   sophisticated cost functions (e.g., expose more methods on the graph that can be used in

@@ -16,7 +16,7 @@ struct PseudoCabaliserGraph {
 };
 typedef struct PseudoCabaliserGraph PseudoCabaliserGraph;
 
-// set everything to zero 
+// set everything to zero
 void flush_slices(size_t n_qubits, uint64_t *slices_mem) {
   size_t num_chunks = NUM_CHUNKS_PER_ROW(n_qubits) * n_qubits;
   for (size_t i = 0; i < num_chunks; i++) {
@@ -54,10 +54,10 @@ void print_adj_matrix(size_t n_qubits, uint64_t **slices) {
   }
 }
 
-// this here will be the most important bit; the cost function that decides how good a
-// graph is (the lower the cost, the better); this here is just a simple example, assuming
-// that single qubits cliffords are 1/100th of the cost of an edge (CZ operator) and all
-// we care about is the sum of those costs
+// this here will be the most important bit; the cost function that decides how
+// good a graph is (the lower the cost, the better); this here is just a simple
+// example, assuming that single qubits cliffords are 1/100th of the cost of an
+// edge (CZ operator) and all we care about is the sum of those costs
 double cost_function(const LcmhGraph *graph, size_t num_ops) {
   return (double)(lcmh_get_num_edges(graph)) + (double)(num_ops) * 0.01;
 }
