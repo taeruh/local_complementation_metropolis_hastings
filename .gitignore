@@ -1,2 +1,3 @@
 output/
-target
+target/
+c_lib/libs/
