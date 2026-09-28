@@ -1,40 +1,80 @@
+use std::collections::HashSet;
+
 use rand::{RngExt, SeedableRng, distr::StandardUniform, rngs::SysRng};
 use rand_pcg::Pcg64Mcg;
 
-use crate::{
-    graph::Graph,
-    c_interface::{LcmhCostFunction, LcmhSingleQubitCliffordOperation},
-};
-
-// remark on the local complementation operators:
-// - they are defined as square roots sqrt{-iX} and sqrt{iZ}
-// - not all papers tell you which root to take (e.g., S and S^dagger both square to Z,
-//   but they act slightly differently on stabilisers)
-// - the roots are defined as sqrt(-iX) = exp(-i pi/4 X) and sqrt(iZ) = exp(i pi/4 Z)
-//   (see, for example, https://iopscience.iop.org/article/10.1088/1367-2630/ae02bd)
-// - up to phases, this gives sqrt{-iX} = HSH and sqrt{iZ} = S^dagger
-
-// the local complementation cliffords are S^dagger and HSH (up to phases); in cababliser
-// we have the _R_ = _S__Z_, as well as _HSH_ therefore, S^dagger -> _R_ and HSH -> _HSH_
-mod clifford_ops {
-    use crate::c_interface::LcmhSingleQubitClifford;
-
-    const LOCAL_CLIFFORD_MASK: LcmhSingleQubitClifford = 1 << 5;
-    const _R_: LcmhSingleQubitClifford = 0x06 | LOCAL_CLIFFORD_MASK;
-    const _HSH_: LcmhSingleQubitClifford = 0x14 | LOCAL_CLIFFORD_MASK;
-    pub const OP_NODE: LcmhSingleQubitClifford = _R_;
-    pub const OP_NEIGHBOUR: LcmhSingleQubitClifford = _HSH_;
-}
+use crate::{c_interface::LcmhCostFunction, clifford_stack::CliffordStack, graph::Graph};
 
 pub struct CoolingConfiguration {
     pub betas: Vec<f64>,
     pub num_steps_per_beta: Vec<usize>,
 }
 
-#[derive(Debug)]
+#[cfg_attr(test, derive(Debug))]
+pub struct CliffordStacks {
+    stacks: Vec<CliffordStack>,
+    #[cfg(test)]
+    pub naive_num_lc_ops: Vec<usize>,
+}
+
+#[cfg_attr(test, derive(Debug))]
 pub struct SearchArtifacts {
-    pub local_clifford_ops: Vec<LcmhSingleQubitCliffordOperation>,
+    pub clifford_stacks: CliffordStacks,
     pub costs: Vec<f64>,
+}
+
+impl CliffordStacks {
+    pub fn into_data(self) -> Vec<CliffordStack> {
+        self.stacks
+    }
+
+    pub fn local_complementation(&mut self, node: usize, neighbours: &HashSet<usize>) {
+        self.stacks[node].push_r();
+        for neighbour in neighbours {
+            self.stacks[*neighbour].push_hsh();
+        }
+        #[cfg(test)]
+        {
+            self.naive_num_lc_ops[node] += neighbours.len() + 1;
+        }
+    }
+
+    pub fn inverse_local_complementation(
+        &mut self,
+        node: usize,
+        neighbours: &HashSet<usize>,
+    ) {
+        self.stacks[node].inverse_push_r();
+        for neighbour in neighbours {
+            self.stacks[*neighbour].inverse_push_hsh();
+        }
+        #[cfg(test)]
+        {
+            self.naive_num_lc_ops[node] -= neighbours.len() + 1;
+        }
+    }
+
+    pub fn num_paulis_approx(&self) -> usize {
+        self.stacks.len()
+    }
+
+    #[cfg(test)]
+    pub fn num_pauli_exact(&self) -> usize {
+        self.stacks.iter().filter(|stack| !stack.top_is_identity()).count()
+    }
+
+    pub fn num_non_pauli_cliffords(&self) -> usize {
+        self.stacks.iter().map(|stack| stack.num_non_pauli_cliffords()).sum()
+    }
+
+    pub fn num_total_approx(&self) -> usize {
+        self.num_paulis_approx() + self.num_non_pauli_cliffords()
+    }
+
+    #[cfg(test)]
+    pub fn num_total_exact(&self) -> usize {
+        self.num_pauli_exact() + self.num_non_pauli_cliffords()
+    }
 }
 
 pub fn search(
@@ -45,14 +85,16 @@ pub fn search(
 ) -> SearchArtifacts {
     let mut rng = match seed {
         Some(seed) => Pcg64Mcg::seed_from_u64(seed),
-        None => Pcg64Mcg::try_from_rng(&mut SysRng).expect(
-            "Failed to create random number
-            generator from entropy",
-        ),
+        None => Pcg64Mcg::try_from_rng(&mut SysRng)
+            .expect("Failed to create random number generator from entropy"),
     };
 
     let mut artifacts = SearchArtifacts {
-        local_clifford_ops: Vec::new(),
+        clifford_stacks: CliffordStacks {
+            stacks: Vec::from_iter((0..graph.num_nodes()).map(|_| CliffordStack::new())),
+            #[cfg(test)]
+            naive_num_lc_ops: vec![0; graph.num_nodes()],
+        },
         costs: Vec::new(),
     };
 
@@ -90,28 +132,24 @@ fn mc_step(
     let num_nodes = graph.num_nodes();
     for _ in 0..num_nodes {
         let node = rng.random_range(0..num_nodes);
-        let num_neighbours = graph.get_neighbours(node).unwrap().len();
         graph.local_complementation(node);
-        let new_cost =
-            cost_function(graph, artifacts.local_clifford_ops.len() + num_neighbours + 1);
+        // the following will be inverted below if the step is rejected {{
+        let neighbours = graph.get_neighbours(node).unwrap();
+        artifacts.clifford_stacks.local_complementation(node, neighbours);
+        // }}
+        // TODO: ask whether we rather want to use num_total_exact
+        let new_cost = cost_function(graph, artifacts.clifford_stacks.num_total_approx());
         let delta_cost = new_cost - current_cost;
         if delta_cost < 0.0
             || rng.sample::<f64, StandardUniform>(StandardUniform)
                 < (-beta * delta_cost).exp()
         {
             current_cost = new_cost;
-            artifacts.local_clifford_ops.push(LcmhSingleQubitCliffordOperation {
-                node,
-                operation: clifford_ops::OP_NODE,
-            });
-            for neighbour in graph.get_neighbours(node).unwrap() {
-                artifacts.local_clifford_ops.push(LcmhSingleQubitCliffordOperation {
-                    node: *neighbour,
-                    operation: clifford_ops::OP_NEIGHBOUR,
-                });
-            }
             artifacts.costs.push(current_cost);
         } else {
+            artifacts
+                .clifford_stacks
+                .inverse_local_complementation(node, neighbours);
             graph.local_complementation(node);
         }
     }
@@ -120,8 +158,8 @@ fn mc_step(
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
+    use crate::c_interface::LcmhSearchArtifacts;
 
     extern "C" fn test_cost_function(
         graph: &Graph,
@@ -150,8 +188,14 @@ mod tests {
         };
 
         let artifacts = search(&mut graph, cooling_config, test_cost_function, None);
+        let naive_num_lc_ops =
+            artifacts.clifford_stacks.naive_num_lc_ops.iter().sum::<usize>();
+        let actual_num_lc_ops_approx = artifacts.clifford_stacks.num_total_approx();
+        let actual_num_lc_ops_exact = artifacts.clifford_stacks.num_total_exact();
+        println!("{:?}", (naive_num_lc_ops, actual_num_lc_ops_approx));
 
-        // println!("{:?}", graph);
-        // println!("{:?}", artifacts.costs);
+        let c_artifacts = LcmhSearchArtifacts::from_artifacts(artifacts);
+        let c_lc_ops = c_artifacts.length_local_clifford_ops;
+        println!("{:?}", (c_lc_ops, actual_num_lc_ops_exact));
     }
 }

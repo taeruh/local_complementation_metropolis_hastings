@@ -47,8 +47,6 @@ I have not done thorough testing yet, so there are probably bugs.
 
 ## Near-Future Work
 
-- The number of single qubits Cliffords can be improved (cf. note in
-  `./lcmh/src/clifford_stack.rs`).
 - Document what things have to be "freed".
 - Do some testing.
 - Anything else that we'll need to integrate this into Cabaliser or have more

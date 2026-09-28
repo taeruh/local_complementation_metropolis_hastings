@@ -8,6 +8,18 @@ use crate::search::{self, CoolingConfiguration, SearchArtifacts};
 #[allow(non_camel_case_types)]
 type size_t = usize;
 
+pub(crate) mod clifford_ops {
+    use crate::c_interface::LcmhSingleQubitClifford;
+
+    const LOCAL_CLIFFORD_MASK: LcmhSingleQubitClifford = 1 << 5;
+    pub const _I_: LcmhSingleQubitClifford = 0x00;
+    pub const _X_: LcmhSingleQubitClifford = 0x01 | LOCAL_CLIFFORD_MASK;
+    pub const _Y_: LcmhSingleQubitClifford = 0x02 | LOCAL_CLIFFORD_MASK;
+    pub const _Z_: LcmhSingleQubitClifford = 0x03 | LOCAL_CLIFFORD_MASK;
+    pub const _S_: LcmhSingleQubitClifford = 0x05 | LOCAL_CLIFFORD_MASK;
+    pub const _HSH_: LcmhSingleQubitClifford = 0x14 | LOCAL_CLIFFORD_MASK;
+}
+
 mod graph_transformation {
     use std::ops::BitOrAssign;
 
@@ -289,6 +301,8 @@ pub struct LcmhSingleQubitCliffordOperation {
 ///
 /// Use [lcmh_free_search_artifacts] to free the memory allocated by the individual
 /// artifact pointers (do not free them manually).
+// TODO: Probably change this here to an analogous version of [SearchArtifacts] which uses
+// one vector per node (depending on how we want to use it in cababliser).
 #[repr(C)]
 pub struct LcmhSearchArtifacts {
     /// The local Clifford operations that do the graph transformation.
@@ -349,9 +363,18 @@ mod vec_helper {
 use vec_helper::VecHelper;
 
 impl LcmhSearchArtifacts {
-    fn from_artifacts(artifacts: SearchArtifacts) -> Self {
-        let ops = ManuallyDrop::new(VecHelper::from_vec(artifacts.local_clifford_ops));
+    pub(crate) fn from_artifacts(artifacts: SearchArtifacts) -> Self {
         let costs = ManuallyDrop::new(VecHelper::from_vec(artifacts.costs));
+        let mut merged_ops = Vec::new();
+        for (node, stack) in artifacts.clifford_stacks.into_data().into_iter().enumerate()
+        {
+            let (lc_cliffords, pauli) = stack.into_cabaliser_encoding(node);
+            merged_ops.extend(lc_cliffords);
+            if let Some(pauli) = pauli {
+                merged_ops.push(pauli);
+            }
+        }
+        let ops = ManuallyDrop::new(VecHelper::from_vec(merged_ops));
         Self {
             local_clifford_ops: ops.get_ptr(),
             length_local_clifford_ops: ops.get_length(),
@@ -381,7 +404,10 @@ pub extern "C" fn lcmh_free_search_artifacts(artifacts: LcmhSearchArtifacts) {
     drop(artifacts);
 }
 
-/// The cost function (or energy function) in the LCMH search.
+/// The cost function (or energy function) in the LCMH search. There are functions to get
+/// data from the graph, e.g. [lcmh_get_num_edges]. `num_single_qubit_lc_operations` is
+/// currently not exact but overcounts the exact number of single-qubit Clifford
+/// operations by up to one identity operation per node.
 pub type LcmhCostFunction =
     extern "C" fn(graph: &LcmhGraph, num_single_qubit_lc_operations: usize) -> f64;
 
@@ -443,7 +469,7 @@ pub extern "C" fn lcmh_search(
 /// valid for `n_qubits`. Similarly, `output_slices` must be valid for `n_qubits` and each
 /// slice `output_slices[i]` must again be valid for `n_qubits`.
 #[unsafe(no_mangle)]
-unsafe extern "C" fn lcmh_direct_search(
+pub unsafe extern "C" fn lcmh_direct_search(
     n_qubits: size_t,
     slices: *mut *mut u64,
     cooling_config: LcmhCoolingConfiguration,
