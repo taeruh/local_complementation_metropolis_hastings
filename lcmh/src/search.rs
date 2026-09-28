@@ -6,8 +6,16 @@ use crate::{
     c_interface::{LcmhCostFunction, LcmhSingleQubitCliffordOperation},
 };
 
-// the local complementation cliffords are S^3 and HSH; in cababliser we have the _R_ =
-// _S__Z_, as well as _HSH_ therefore, S^3 -> _R_ and HSH -> _HSH_
+// remark on the local complementation operators:
+// - they are defined as square roots sqrt{-iX} and sqrt{iZ}
+// - not all papers tell you which root to take (e.g., S and S^dagger both square to Z,
+//   but they act slightly differently on stabilisers)
+// - the roots are defined as sqrt(-iX) = exp(-i pi/4 X) and sqrt(iZ) = exp(i pi/4 Z)
+//   (see, for example, https://iopscience.iop.org/article/10.1088/1367-2630/ae02bd)
+// - up to phases, this gives sqrt{-iX} = HSH and sqrt{iZ} = S^dagger
+
+// the local complementation cliffords are S^dagger and HSH (up to phases); in cababliser
+// we have the _R_ = _S__Z_, as well as _HSH_ therefore, S^dagger -> _R_ and HSH -> _HSH_
 mod clifford_ops {
     use crate::c_interface::LcmhSingleQubitClifford;
 
@@ -134,7 +142,7 @@ mod tests {
         graph.add_edge(2, 4);
         graph.add_edge(3, 4);
 
-        println!("{:?}", graph);
+        // println!("{:?}", graph);
 
         let cooling_config = CoolingConfiguration {
             betas: vec![0.1, 0.5, 10.0],
@@ -143,7 +151,7 @@ mod tests {
 
         let artifacts = search(&mut graph, cooling_config, test_cost_function, None);
 
-        println!("{:?}", graph);
-        println!("{:?}", artifacts.costs);
+        // println!("{:?}", graph);
+        // println!("{:?}", artifacts.costs);
     }
 }
