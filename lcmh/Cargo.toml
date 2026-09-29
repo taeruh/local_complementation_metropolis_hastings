@@ -22,3 +22,5 @@ crate-type = ["cdylib", "staticlib"]
 [dependencies]
 rand = { version = "0.10.3", default-features = false, features = ["sys_rng"] }
 rand_pcg = { version = "0.10.2", default-features = false }
+
+[dev-dependencies]

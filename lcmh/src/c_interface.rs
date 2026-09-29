@@ -16,7 +16,10 @@ pub(crate) mod clifford_ops {
     pub const _X_: LcmhSingleQubitClifford = 0x01 | LOCAL_CLIFFORD_MASK;
     pub const _Y_: LcmhSingleQubitClifford = 0x02 | LOCAL_CLIFFORD_MASK;
     pub const _Z_: LcmhSingleQubitClifford = 0x03 | LOCAL_CLIFFORD_MASK;
+    pub const _H_: LcmhSingleQubitClifford = 0x04 | LOCAL_CLIFFORD_MASK;
     pub const _S_: LcmhSingleQubitClifford = 0x05 | LOCAL_CLIFFORD_MASK;
+    pub const _SH_: LcmhSingleQubitClifford = 0x0c | LOCAL_CLIFFORD_MASK;
+    pub const _HS_: LcmhSingleQubitClifford = 0x0e | LOCAL_CLIFFORD_MASK;
     pub const _HSH_: LcmhSingleQubitClifford = 0x14 | LOCAL_CLIFFORD_MASK;
 }
 
@@ -301,7 +304,7 @@ pub struct LcmhSingleQubitCliffordOperation {
 
 /// Collection of search artifacts (apart from the transformed graph) that are returned by
 /// the search functions.
-/// 
+///
 /// # Garbage collection
 /// Use [lcmh_free_search_artifacts] to free the according memory.
 // TODO: Probably change this here to an analogous version of [SearchArtifacts] which uses

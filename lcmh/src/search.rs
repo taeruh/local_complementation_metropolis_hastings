@@ -44,9 +44,9 @@ impl CliffordStacks {
         node: usize,
         neighbours: &HashSet<usize>,
     ) {
-        self.stacks[node].inverse_push_r();
+        self.stacks[node].reset_push();
         for neighbour in neighbours {
-            self.stacks[*neighbour].inverse_push_hsh();
+            self.stacks[*neighbour].reset_push()
         }
         #[cfg(test)]
         {
