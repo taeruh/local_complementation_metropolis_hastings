@@ -8,19 +8,77 @@ use crate::search::{self, CoolingConfiguration, SearchArtifacts};
 #[allow(non_camel_case_types)]
 type size_t = usize;
 
-pub(crate) mod clifford_ops {
-    use crate::c_interface::LcmhSingleQubitClifford;
+pub(crate) mod clifford_transformation {
+    use crate::{c_interface::LcmhSingleQubitClifford, one_local_clifford::Clifford};
 
+    // copy from cabaliser
     const LOCAL_CLIFFORD_MASK: LcmhSingleQubitClifford = 1 << 5;
-    pub const _I_: LcmhSingleQubitClifford = 0x00;
-    pub const _X_: LcmhSingleQubitClifford = 0x01 | LOCAL_CLIFFORD_MASK;
-    pub const _Y_: LcmhSingleQubitClifford = 0x02 | LOCAL_CLIFFORD_MASK;
-    pub const _Z_: LcmhSingleQubitClifford = 0x03 | LOCAL_CLIFFORD_MASK;
-    pub const _H_: LcmhSingleQubitClifford = 0x04 | LOCAL_CLIFFORD_MASK;
-    pub const _S_: LcmhSingleQubitClifford = 0x05 | LOCAL_CLIFFORD_MASK;
-    pub const _SH_: LcmhSingleQubitClifford = 0x0c | LOCAL_CLIFFORD_MASK;
-    pub const _HS_: LcmhSingleQubitClifford = 0x0e | LOCAL_CLIFFORD_MASK;
-    pub const _HSH_: LcmhSingleQubitClifford = 0x14 | LOCAL_CLIFFORD_MASK;
+    const _I_: LcmhSingleQubitClifford = 0x00;
+    const _X_: LcmhSingleQubitClifford = 0x01 | LOCAL_CLIFFORD_MASK;
+    const _Y_: LcmhSingleQubitClifford = 0x02 | LOCAL_CLIFFORD_MASK;
+    const _Z_: LcmhSingleQubitClifford = 0x03 | LOCAL_CLIFFORD_MASK;
+    const _H_: LcmhSingleQubitClifford = 0x04 | LOCAL_CLIFFORD_MASK;
+    const _S_: LcmhSingleQubitClifford = 0x05 | LOCAL_CLIFFORD_MASK;
+    const _R_: LcmhSingleQubitClifford = 0x06 | LOCAL_CLIFFORD_MASK;
+    const _HX_: LcmhSingleQubitClifford = 0x07 | LOCAL_CLIFFORD_MASK;
+    const _SX_: LcmhSingleQubitClifford = 0x08 | LOCAL_CLIFFORD_MASK;
+    const _RX_: LcmhSingleQubitClifford = 0x09 | LOCAL_CLIFFORD_MASK;
+    const _HY_: LcmhSingleQubitClifford = 0x0a | LOCAL_CLIFFORD_MASK;
+    const _HZ_: LcmhSingleQubitClifford = 0x0b | LOCAL_CLIFFORD_MASK;
+    const _SH_: LcmhSingleQubitClifford = 0x0c | LOCAL_CLIFFORD_MASK;
+    const _RH_: LcmhSingleQubitClifford = 0x0d | LOCAL_CLIFFORD_MASK;
+    const _HS_: LcmhSingleQubitClifford = 0x0e | LOCAL_CLIFFORD_MASK;
+    const _HR_: LcmhSingleQubitClifford = 0x0f | LOCAL_CLIFFORD_MASK;
+    const _HSX_: LcmhSingleQubitClifford = 0x10 | LOCAL_CLIFFORD_MASK;
+    const _HRX_: LcmhSingleQubitClifford = 0x11 | LOCAL_CLIFFORD_MASK;
+    const _SHY_: LcmhSingleQubitClifford = 0x12 | LOCAL_CLIFFORD_MASK;
+    const _RHY_: LcmhSingleQubitClifford = 0x13 | LOCAL_CLIFFORD_MASK;
+    const _HSH_: LcmhSingleQubitClifford = 0x14 | LOCAL_CLIFFORD_MASK;
+    const _HRH_: LcmhSingleQubitClifford = 0x15 | LOCAL_CLIFFORD_MASK;
+    const _RHS_: LcmhSingleQubitClifford = 0x16 | LOCAL_CLIFFORD_MASK;
+    const _SHR_: LcmhSingleQubitClifford = 0x17 | LOCAL_CLIFFORD_MASK;
+
+    // translate some of them into our naming here
+    const _SY_: LcmhSingleQubitClifford = _RX_;
+    const _SZ_: LcmhSingleQubitClifford = _R_;
+    const _SHX_: LcmhSingleQubitClifford = _RH_;
+    const _SHZ_: LcmhSingleQubitClifford = _RHY_;
+    const _HSY_: LcmhSingleQubitClifford = _HRX_;
+    const _HSZ_: LcmhSingleQubitClifford = _HR_;
+    const _HSHX_: LcmhSingleQubitClifford = _HRH_;
+    const _HSHY_: LcmhSingleQubitClifford = _SHR_;
+    const _HSHZ_: LcmhSingleQubitClifford = _RHS_;
+
+    impl Clifford {
+        pub fn into_cabaliser_encoding(self) -> super::LcmhSingleQubitClifford {
+            match self {
+                Clifford::I => _I_,
+                Clifford::X => _X_,
+                Clifford::Y => _Y_,
+                Clifford::Z => _Z_,
+                Clifford::S => _S_,
+                Clifford::SX => _SX_,
+                Clifford::SY => _SY_,
+                Clifford::SZ => _SZ_,
+                Clifford::H => _H_,
+                Clifford::HX => _HX_,
+                Clifford::HY => _HY_,
+                Clifford::HZ => _HZ_,
+                Clifford::SH => _S_,
+                Clifford::SHX => _SHX_,
+                Clifford::SHY => _SHY_,
+                Clifford::SHZ => _SHZ_,
+                Clifford::HS => _HS_,
+                Clifford::HSX => _HSX_,
+                Clifford::HSY => _HSY_,
+                Clifford::HSZ => _HSZ_,
+                Clifford::HSH => _HSH_,
+                Clifford::HSHX => _HSHX_,
+                Clifford::HSHY => _HSHY_,
+                Clifford::HSHZ => _HSHZ_,
+            }
+        }
+    }
 }
 
 mod graph_transformation {
@@ -293,15 +351,6 @@ impl From<LcmhCoolingConfiguration> for CoolingConfiguration {
 /// Encoding for the local Clifford operations according to the encoding in Cabaliser
 pub type LcmhSingleQubitClifford = u8;
 
-#[repr(C)]
-#[derive(Debug)]
-pub struct LcmhSingleQubitCliffordOperation {
-    /// The operation that is applied.
-    pub operation: LcmhSingleQubitClifford,
-    /// The node on which the operation is applied.
-    pub node: usize,
-}
-
 /// Collection of search artifacts (apart from the transformed graph) that are returned by
 /// the search functions.
 ///
@@ -311,8 +360,11 @@ pub struct LcmhSingleQubitCliffordOperation {
 // one vector per node (depending on how we want to use it in cababliser).
 #[repr(C)]
 pub struct LcmhSearchArtifacts {
-    /// The local Clifford operations that do the graph transformation.
-    pub local_clifford_ops: *mut LcmhSingleQubitCliffordOperation,
+    /// The local Clifford operations for each node that transform the graph.
+    ///
+    /// The length of this array is equal to the number of nodes in the graph. The index
+    /// corresponds to the node index.
+    pub local_clifford_ops: *mut LcmhSingleQubitClifford,
     pub length_local_clifford_ops: usize,
     /// The costs of all the intermediate (accepted) graphs.
     pub costs: *mut f64,
@@ -368,18 +420,15 @@ mod vec_helper {
 use vec_helper::VecHelper;
 
 impl LcmhSearchArtifacts {
-    pub(crate) fn from_artifacts(artifacts: SearchArtifacts) -> Self {
+    fn from_artifacts(artifacts: SearchArtifacts) -> Self {
+        let ops = artifacts
+            .clifford_stacks
+            .into_data()
+            .into_iter()
+            .map(|stack| stack.into_clifford().into_cabaliser_encoding())
+            .collect::<Vec<_>>();
+        let ops = ManuallyDrop::new(VecHelper::from_vec(ops));
         let costs = ManuallyDrop::new(VecHelper::from_vec(artifacts.costs));
-        let mut merged_ops = Vec::new();
-        for (node, stack) in artifacts.clifford_stacks.into_data().into_iter().enumerate()
-        {
-            let (lc_cliffords, pauli) = stack.into_cabaliser_encoding(node);
-            merged_ops.extend(lc_cliffords);
-            if let Some(pauli) = pauli {
-                merged_ops.push(pauli);
-            }
-        }
-        let ops = ManuallyDrop::new(VecHelper::from_vec(merged_ops));
         Self {
             local_clifford_ops: ops.get_ptr(),
             length_local_clifford_ops: ops.get_length(),
@@ -414,8 +463,7 @@ pub extern "C" fn lcmh_free_search_artifacts(artifacts: LcmhSearchArtifacts) {
 /// There are functions to get data from the graph, e.g. [lcmh_get_num_edges].
 /// `num_single_qubit_lc_operations` is currently not exact but overcounts the exact
 /// number of single-qubit Clifford operations by up to one identity operation per node.
-pub type LcmhCostFunction =
-    extern "C" fn(graph: &LcmhGraph, num_single_qubit_lc_operations: usize) -> f64;
+pub type LcmhCostFunction = extern "C" fn(graph: &LcmhGraph) -> f64;
 
 fn opt_seed(seed_from_entropy: bool, seed: u64) -> Option<u64> {
     if seed_from_entropy {

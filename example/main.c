@@ -56,10 +56,10 @@ void print_adj_matrix(size_t n_qubits, uint64_t **slices) {
 
 // this here will be the most important bit; the cost function that decides how
 // good a graph is (the lower the cost, the better); this here is just a simple
-// example, assuming that single qubits cliffords are 1/100th of the cost of an
-// edge (CZ operator) and all we care about is the sum of those costs
-double cost_function(const LcmhGraph *graph, size_t num_ops) {
-  return (double)(lcmh_get_num_edges(graph)) + (double)(num_ops) * 0.01;
+// example where we only care about the total number of edges in the graph (the
+// fewer edges, the better)
+double cost_function(const LcmhGraph *graph) {
+  return (double)(lcmh_get_num_edges(graph));
 }
 
 int main(void) {
@@ -182,9 +182,8 @@ int main(void) {
 
   printf("\nLocal Clifford operations applied (first %zu):\n", num_ops_to_view);
   for (size_t i = 0; i < num_ops_to_view; i++) {
-    LcmhSingleQubitCliffordOperation op = artifacts.local_clifford_ops[i];
-    printf("Local Clifford operation: node %zu, operation %u\n", op.node,
-           op.operation);
+    LcmhSingleQubitClifford op = artifacts.local_clifford_ops[i];
+    printf("node %zu: operation %u\n", i, op);
   }
 
   lcmh_free_search_artifacts(artifacts);

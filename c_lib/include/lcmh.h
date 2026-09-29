@@ -40,15 +40,8 @@ typedef struct LcmhCoolingConfiguration LcmhCoolingConfiguration;
 
 typedef uint8_t LcmhSingleQubitClifford;
 
-struct LcmhSingleQubitCliffordOperation {
-  LcmhSingleQubitClifford operation;
-  size_t node;
-};
-typedef struct LcmhSingleQubitCliffordOperation
-    LcmhSingleQubitCliffordOperation;
-
 struct LcmhSearchArtifacts {
-  LcmhSingleQubitCliffordOperation *local_clifford_ops;
+  LcmhSingleQubitClifford *local_clifford_ops;
   size_t length_local_clifford_ops;
   double *costs;
   size_t length_costs;
@@ -57,7 +50,7 @@ typedef struct LcmhSearchArtifacts LcmhSearchArtifacts;
 
 void lcmh_free_search_artifacts(LcmhSearchArtifacts artifacts);
 
-typedef double (*LcmhCostFunction)(const LcmhGraph *graph, size_t num_executed_lcs);
+typedef double (*LcmhCostFunction)(const LcmhGraph *graph);
 
 LcmhSearchArtifacts lcmh_search(LcmhGraph *graph,
                                 LcmhCoolingConfiguration cooling_config,

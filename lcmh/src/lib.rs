@@ -4,4 +4,4 @@
 mod graph;
 pub mod c_interface;
 mod search;
-mod clifford_stack;
+mod one_local_clifford;
