@@ -461,8 +461,6 @@ pub extern "C" fn lcmh_free_search_artifacts(artifacts: LcmhSearchArtifacts) {
 /// The cost function (or energy function) in the LCMH search.
 ///
 /// There are functions to get data from the graph, e.g. [lcmh_get_num_edges].
-/// `num_single_qubit_lc_operations` is currently not exact but overcounts the exact
-/// number of single-qubit Clifford operations by up to one identity operation per node.
 pub type LcmhCostFunction = extern "C" fn(graph: &LcmhGraph) -> f64;
 
 fn opt_seed(seed_from_entropy: bool, seed: u64) -> Option<u64> {
