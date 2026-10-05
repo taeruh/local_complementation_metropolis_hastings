@@ -1,4 +1,8 @@
-use std::collections::HashSet;
+use std::{collections, hash::BuildHasherDefault};
+
+use rustc_hash::FxHasher;
+
+pub type HashSet<T> = collections::HashSet<T, BuildHasherDefault<FxHasher>>;
 
 #[derive(Debug, Clone)]
 pub struct Graph {
@@ -13,7 +17,7 @@ impl Graph {
     pub fn new(size: usize) -> Self {
         let mut nodes = Vec::with_capacity(size);
         for _ in 0..size {
-            nodes.push(HashSet::new());
+            nodes.push(HashSet::with_hasher(BuildHasherDefault::<FxHasher>::default()));
         }
         Graph { nodes }
     }

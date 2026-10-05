@@ -1,10 +1,10 @@
-use std::collections::HashSet;
-
 use rand::{RngExt, SeedableRng, distr::StandardUniform, rngs::SysRng};
 use rand_pcg::Pcg64Mcg;
 
 use crate::{
-    c_interface::LcmhCostFunction, graph::Graph, one_local_clifford::CliffordStack,
+    c_interface::LcmhCostFunction,
+    graph::{Graph, HashSet},
+    one_local_clifford::CliffordStack,
 };
 
 pub struct CoolingConfiguration {

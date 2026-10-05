@@ -14,8 +14,8 @@ be located in `./c_lib/libs/`. This requires a Rust toolchain to be installed.
 - Currently, it requires the Rust 2024 edition with a Rust version 1.85.0 or higher; this
   was just the default when I started this here; we can most likely lower this if
   required.
-- There are two direct Rust crate dependencies at the moment: `rand` and `rand_pcg`; this
-  results at the moment in the following dependency tree:
+- There are three direct Rust crate dependencies at the moment: `rand`, `rand_pcg` and
+  `rustc-hash`; this results at the moment in the following dependency tree:
   ```text
   lcmh v0.1.0
   ├── rand v0.10.3
@@ -24,13 +24,16 @@ be located in `./c_lib/libs/`. This requires a Rust toolchain to be installed.
   │   │   ├── libc v0.2.189
   │   │   └── rand_core v0.10.1
   │   └── rand_core v0.10.1
-  └── rand_pcg v0.10.2
-      └── rand_core v0.10.1
+  ├── rand_pcg v0.10.2
+  │   └── rand_core v0.10.1
+  └── rustc-hash v2.1.3
   ```
   If necessary, there are ways to get rid of the dependencies:
   - If we already use already some other random number generator that exposes a C
     interface (e.g., via the GNU Scientific Library), we can also just use that.
   - We can implement our own (not so good) random number generator.
+  - `rustc-hash` is only used to replace the built-in hashing function by a faster (but
+    not cryptographically secure) one.
 
 ## Documentation and Examples
 
