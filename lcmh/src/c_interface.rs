@@ -477,17 +477,16 @@ fn opt_seed(seed_from_entropy: bool, seed: u64) -> Option<u64> {
 ///
 /// # Arguments
 /// - `graph`: The LCMH graph to be transformed.
-/// - `cooling_config`: The cooling configuration that is used to control the search.
-/// - `cost_function`: The cost function (or energy function) that is used to evaluate the
-///   quality of the proposed graph. It gets passed the the proposed graph and the total
-///   number of single-qubit Clifford gates that have been applied so far (including the
-///   proposed step).
-/// - `seed_from_entropy`: If true, the random number generator is seeded from entropy.
-/// - `seed`: If `seed_from_entropy` is false, the random number generator is seeded with
-///   this value.
+/// - `cooling_config`: The cooling configurations that are used for the MH search.
+/// - `cost_function`: The cost function (or energy function) that is used in the MH
+///   search.
+/// - `seed_from_entropy`: If true, the random number generator is seeded from entropy,
+///   otherwise the seed` is used.
+/// - `seed`: The seed for the random number generator if `seed_from_entropy` is false.
 ///
 /// # Returns
-/// - Additional artifacts from the search.
+/// - Additional artifacts from the search, e.g., the local Clifford operations that
+///   transformed the graph.
 #[unsafe(no_mangle)]
 pub extern "C" fn lcmh_search(
     graph: &mut LcmhGraph,
@@ -511,10 +510,22 @@ pub extern "C" fn lcmh_search(
 /// [lcmh_transform_cabaliser_graph_to_lcmh_graph].
 ///
 /// # Arguments
-/// ...
+/// - `n_qubits`: The number of qubits/nodes in the graph.
+/// - `slices`: A pointer to the pointers that point to the rows of the graph (cf. graph
+///   representation in Cabaliser).
+/// - `cooling_config`: The cooling configurations that are used for the MH search.
+/// - `cost_function`: The cost function (or energy function) that is used in the MH
+///   search.
+/// - `seed_from_entropy`: If true, the random number generator is seeded from entropy,
+///   otherwise the seed` is used.
+/// - `seed`: The seed for the random number generator if `seed_from_entropy` is false.
+/// - `output_slices`: A pointer to the pointers that point to the rows of a
+///   zero-initialised buffer that is used to write the transformed graph into (cf. graph
+///   representation).
 ///
 /// # Returns
-/// ...
+/// - Additional artifacts from the search, e.g., the local Clifford operations that
+///   transformed the graph.
 ///
 /// # Safety
 /// `slices` must be initialised for `n_qubits` and each slice `slices[i]` must again be

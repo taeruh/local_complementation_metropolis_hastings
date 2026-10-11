@@ -68,7 +68,7 @@ int main(void) {
   // assume the following is actually a graph coming from cabaliser, i.e.,
   // tableau_t.n_qubits and tableau_t.slices_x {{
   PseudoCabaliserGraph input_graph = create_pseudo_cabaliser_graph(5);
-  // create some edges (there is a better way to do this:
+  // create some edges (there is a better way to do this):
   // edge (0, 1)
   input_graph.slices[0][0] |= 1ull << 1;
   input_graph.slices[1][0] |= 1ull << 0;
@@ -93,15 +93,14 @@ int main(void) {
   print_adj_matrix(n_qubits, input_graph.slices);
 
   // a cooling configuration (note that the scale of the beta values depends on
-  // the scale of the cost function) size_t num_betas = 3; double betas[] =
-  // {0.1, 0.5, 1.0}; size_t num_steps_per_beta[] = {2, 2, 2};
+  // the scale of the cost function)
   LcmhCoolingConfiguration cooling_config = {.num_betas = 3,
                                              .betas = (double[]){0.1, 0.5, 1.0},
                                              .num_steps_per_beta =
                                                  (size_t[]){2, 2, 2}};
 
   // not seeding randomly for reproducibility here; if you want to seed
-  // randomly, set `seed_from_entropy` to 1
+  // randomly, set `seed_from_entropy` to 1 (the value of `seed` does not matter then)
   uint8_t seed_from_entropy = 0;
   uint64_t seed = 0;
 
@@ -174,14 +173,9 @@ int main(void) {
   printf("\nFinal adjacency matrix:\n");
   print_adj_matrix(n_qubits, output_graph.slices);
 
-  // let's view the lc operations that were applied to the graph (encoded
-  // according to instructions_table.h in cabaliser); only view the first 10...
-  size_t num_ops_to_view = artifacts.length_local_clifford_ops < 10
-                               ? artifacts.length_local_clifford_ops
-                               : 10;
 
-  printf("\nLocal Clifford operations applied (first %zu):\n", num_ops_to_view);
-  for (size_t i = 0; i < num_ops_to_view; i++) {
+  printf("\nLocal Clifford operations applied:\n");
+  for (size_t i = 0; i < artifacts.length_local_clifford_ops; i++) {
     LcmhSingleQubitClifford op = artifacts.local_clifford_ops[i];
     printf("node %zu: operation %u\n", i, op);
   }
