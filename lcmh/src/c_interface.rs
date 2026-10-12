@@ -117,7 +117,7 @@ mod graph_transformation {
 
             let num_chunks = c_graph.n_qubits.div_ceil(CHUNK_SIZE);
             // note (for below) that this index points to the last chunk of all the
-            // rows which is initialised as [Self::new] guarantees that
+            // columns which is initialised as [Self::new] guarantees that
             let last_chunk_idx = num_chunks - 1;
             let max_bit_in_last_chunk = (c_graph.n_qubits - 1) % CHUNK_SIZE;
             let mut graph = Graph::new(c_graph.n_qubits);
@@ -204,9 +204,9 @@ pub type LcmhGraph = crate::graph::Graph;
 ///
 /// Creates a new LCMH from the given number of qubits, `n_qubits` and
 /// the backing memory of the graph that is accessed via the `slices`. It is
-/// assumed that the graph is stored as a binary adjacency matrix, where each row
-/// can be accessed via the `slices` pointer, and each row-pointer then points to
-/// the 64-bit chunks that encode the row.
+/// assumed that the graph is stored as a binary adjacency matrix, where each column
+/// can be accessed via the `slices` pointer, and each column-pointer then points to
+/// the 64-bit chunks that encode the column.
 ///
 /// # Arguments
 /// - `n_qubits`: The number of qubits/nodes in the graph.
@@ -512,7 +512,7 @@ pub extern "C" fn lcmh_search(
 ///
 /// # Arguments
 /// - `n_qubits`: The number of qubits/nodes in the graph.
-/// - `slices`: A pointer to the pointers that point to the rows of the graph (cf. graph
+/// - `slices`: A pointer to the pointers that point to the column of the graph (cf. graph
 ///   representation in Cabaliser).
 /// - `cooling_config`: The cooling configurations that are used for the MH search.
 /// - `cost_function`: The cost function (or energy function) that is used in the MH
@@ -520,7 +520,7 @@ pub extern "C" fn lcmh_search(
 /// - `seed_from_entropy`: If true, the random number generator is seeded from entropy,
 ///   otherwise the seed` is used.
 /// - `seed`: The seed for the random number generator if `seed_from_entropy` is false.
-/// - `output_slices`: A pointer to the pointers that point to the rows of a
+/// - `output_slices`: A pointer to the pointers that point to the column of a
 ///   zero-initialised buffer that is used to write the transformed graph into (cf. graph
 ///   representation).
 ///

@@ -54,6 +54,8 @@ if __name__ == "__main__":
     print(n_qubits)
     print(slices.contents.__tableau.contents)
 
+    input_widget.tableau_print()
+
     # TODO: ...
 
     # core_lib.core_lib.lcmh_simpler_direct_search(

@@ -7,7 +7,7 @@
 
 #define CHUNK_OBJ uint64_t
 #define CHUNK_SIZE sizeof(CHUNK_OBJ)
-#define NUM_CHUNKS_PER_ROW(n_qubits) ((n_qubits + CHUNK_SIZE - 1) / CHUNK_SIZE)
+#define NUM_CHUNKS_PER_COLUMN(n_qubits) ((n_qubits + CHUNK_SIZE - 1) / CHUNK_SIZE)
 
 // this is basically what we get from cabaliser
 struct PseudoCabaliserGraph {
@@ -18,7 +18,7 @@ typedef struct PseudoCabaliserGraph PseudoCabaliserGraph;
 
 // set everything to zero
 void flush_slices(size_t n_qubits, uint64_t *slices_mem) {
-  size_t num_chunks = NUM_CHUNKS_PER_ROW(n_qubits) * n_qubits;
+  size_t num_chunks = NUM_CHUNKS_PER_COLUMN(n_qubits) * n_qubits;
   for (size_t i = 0; i < num_chunks; i++) {
     slices_mem[i] = 0;
   }
@@ -26,11 +26,11 @@ void flush_slices(size_t n_qubits, uint64_t *slices_mem) {
 
 // initialise a pseudo cabaliser graph initialised to zero (i.e., no edges)
 PseudoCabaliserGraph create_pseudo_cabaliser_graph(size_t n_qubits) {
-  size_t num_chunks_per_row = NUM_CHUNKS_PER_ROW(n_qubits);
-  uint64_t *slices_mem = malloc(n_qubits * num_chunks_per_row * CHUNK_SIZE);
+  size_t num_chunks_per_column = NUM_CHUNKS_PER_COLUMN(n_qubits);
+  uint64_t *slices_mem = malloc(n_qubits * num_chunks_per_column * CHUNK_SIZE);
   uint64_t **slices = malloc(n_qubits * sizeof(size_t));
   for (size_t i = 0; i < n_qubits; i++) {
-    slices[i] = slices_mem + i * num_chunks_per_row;
+    slices[i] = slices_mem + i * num_chunks_per_column;
   }
   flush_slices(n_qubits, slices[0]);
   return (PseudoCabaliserGraph){.n_qubits = n_qubits, .slices = slices};
