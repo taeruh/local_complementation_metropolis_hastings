@@ -4,4 +4,4 @@ c_lib/libs/
 
 .venv
 *egg-info*
-build/*
+*build/*
