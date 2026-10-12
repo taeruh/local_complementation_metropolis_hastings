@@ -13,7 +13,7 @@ pub(crate) mod clifford_transformation {
 
     // copy from cabaliser
     const LOCAL_CLIFFORD_MASK: LcmhSingleQubitClifford = 1 << 5;
-    const _I_: LcmhSingleQubitClifford = 0x00;
+    const _I_: LcmhSingleQubitClifford = LOCAL_CLIFFORD_MASK;
     const _X_: LcmhSingleQubitClifford = 0x01 | LOCAL_CLIFFORD_MASK;
     const _Y_: LcmhSingleQubitClifford = 0x02 | LOCAL_CLIFFORD_MASK;
     const _Z_: LcmhSingleQubitClifford = 0x03 | LOCAL_CLIFFORD_MASK;
@@ -128,7 +128,6 @@ mod graph_transformation {
                         graph.add_edge(i, chunk_idx * CHUNK_SIZE + j);
                     }
                 };
-
             for i in 0..(c_graph.n_qubits - 1) {
                 // Safety: we have i < n_qubits - 1 <= n_qubits - 1
                 let slice = unsafe { *c_graph.slices.add(i) };
