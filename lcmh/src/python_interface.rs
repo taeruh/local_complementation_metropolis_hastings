@@ -16,7 +16,7 @@ extern "C" fn cost_function(graph: &Graph) -> f64 {
 /// slice `output_slices[i]` must again be valid for `n_qubits`. `output_cliffords` must
 /// be valid for `n_qubits`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn default_direct_search(
+pub unsafe extern "C" fn lcmh_simpler_direct_search(
     n_qubits: size_t,
     slices: *mut *mut u64,
     output_slices: *mut *mut u64,
