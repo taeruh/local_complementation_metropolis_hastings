@@ -33,8 +33,8 @@ size_t lcmh_get_nodes_num_neighbours(const LcmhGraph *graph, size_t node);
 
 struct LcmhCoolingConfiguration {
   size_t num_betas;
-  double *betas;
-  size_t *num_steps_per_beta;
+  double const *betas;
+  size_t const *num_steps_per_beta;
 };
 typedef struct LcmhCoolingConfiguration LcmhCoolingConfiguration;
 

@@ -3,5 +3,6 @@
 
 mod graph;
 pub mod c_interface;
+pub mod python_interface;
 mod search;
 mod one_local_clifford;

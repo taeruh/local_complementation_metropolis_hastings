@@ -6,7 +6,7 @@ use crate::search::{self, CoolingConfiguration, SearchArtifacts};
 // equivalent to Rust's usize
 // TODO: get the actual size_t via a build script...
 #[allow(non_camel_case_types)]
-type size_t = usize;
+pub type size_t = usize;
 
 pub(crate) mod clifford_transformation {
     use crate::{c_interface::LcmhSingleQubitClifford, one_local_clifford::Clifford};
@@ -192,7 +192,7 @@ mod graph_transformation {
     }
 }
 
-use graph_transformation::CabaliserGraph;
+pub(crate) use graph_transformation::CabaliserGraph;
 
 /// The graph encoding we use for the LCMH search.
 ///
@@ -326,10 +326,10 @@ pub struct LcmhCoolingConfiguration {
     /// The number of betas.
     pub num_betas: usize,
     /// The betas.
-    pub betas: *mut f64,
+    pub betas: *const f64,
     /// The number of "steps" per beta. Note that each "step" consists of
     /// `graph.num_nodes()` local complementation draws (not necessarily accepted).
-    pub num_steps_per_beta: *mut usize,
+    pub num_steps_per_beta: *const usize,
 }
 
 impl From<LcmhCoolingConfiguration> for CoolingConfiguration {
@@ -349,6 +349,7 @@ impl From<LcmhCoolingConfiguration> for CoolingConfiguration {
 }
 
 /// Encoding for the local Clifford operations according to the encoding in Cabaliser
+/// (i.e., instruction_t).
 pub type LcmhSingleQubitClifford = u8;
 
 /// Collection of search artifacts (apart from the transformed graph) that are returned by
