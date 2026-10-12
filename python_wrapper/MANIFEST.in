@@ -1,1 +1,1 @@
-include lcmh/liblcmh.so
+include lcmh/libs/liblcmh.so

@@ -13,6 +13,7 @@ def toffoli_widget() -> Widget:
     _Tdag_ = 2
     n_qubits = 3
     max_qubits = 20
+
     def toffoli_gate(ctrl_a, ctrl_b, targ):
         return [
             (gates.RZ, (ctrl_a, _T_)),
@@ -33,31 +34,75 @@ def toffoli_widget() -> Widget:
             (gates.CNOT, (ctrl_b, targ)),
             (gates.H, (targ,)),
         ]
+
     toffoli = toffoli_gate(0, 1, 2)
     wid = Widget(n_qubits, max_qubits)  # , teleport_input=False)
     ops = OperationSequence(len(toffoli))
     for opcode, args in toffoli:
         ops.append(opcode, *args)
     wid(ops)
+    wid.decompose()
     return wid
 
-def buffer_widget(n_qubits, max_qubits) -> Widget:
-    return Widget(n_qubits, max_qubits)
 
+def buffer_widget(n_qubits, max_qubits) -> Widget:
+    wid = Widget(n_qubits, max_qubits, n_inputs=0)
+    # print(wid.get_local_cliffords().to_list())
+    # wid.tableau_print(); print()
+    wid.decompose()
+    return wid
+
+
+import ctypes
+from ctypes import Structure, POINTER, c_uint64, c_size_t, c_void_p, c_bool
+
+
+class Tableau(Structure):
+    _fields_ = [
+        ("n_qubits", c_size_t),
+        ("slice_len", c_size_t),
+        ("chunks", c_void_p),
+        ("slices_x", POINTER(POINTER(c_uint64))),
+        ("slices_z", POINTER(POINTER(c_uint64))),
+        ("phases", POINTER(c_uint64)),
+        ("orientation", c_bool),
+    ]
+
+def get_slices(widget):
+    tableau_ptr = ctypes.cast(widget.widget.contents.__tableau, POINTER(Tableau))
+    return tableau_ptr.contents.slices_z  # I thought it was on the x slices ...?
+
+def get_cliffords(widget):
+    return widget.widget.contents.queue.contents.cliffords
 
 if __name__ == "__main__":
     input_widget = toffoli_widget()
-    output_widget = buffer_widget(3, 20)
+    effective_n_qubits = input_widget.get_n_qubits()
+    n_qubits = input_widget.get_n_qubits()
+    max_qubits = input_widget.get_max_qubits()
+    output_widget = buffer_widget(n_qubits, max_qubits)
 
-    n_qubits = input_widget.widget.contents.max_qubits
-    slices = input_widget.widget
-    print(n_qubits)
-    print(slices.contents.__tableau.contents)
+    # output_widget.local_cliffords = None
+    # print(output_widget.get_local_cliffords().to_list())
 
+    # output_widget.tableau_print()
+
+    input_slices = get_slices(input_widget)
+    output_slices = get_slices(output_widget)
+    output_cliffords = get_cliffords(output_widget)
+
+
+    core_lib.core_lib.lcmh_simpler_direct_search(
+        n_qubits, input_slices, output_slices, output_cliffords
+    )
+    output_widget.local_cliffords = None
+    print(output_widget.get_local_cliffords().to_list())
+    input_widget.local_cliffords = None
+    print(input_widget.get_local_cliffords().to_list())
+
+    # TODO: need to merge the cliffords
+
+    print()
     input_widget.tableau_print()
-
-    # TODO: ...
-
-    # core_lib.core_lib.lcmh_simpler_direct_search(
-    #     # arguments...
-    # )
+    print()
+    output_widget.tableau_print()

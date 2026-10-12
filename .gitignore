@@ -1,7 +1,6 @@
 output/
 target/
-c_lib/libs/
-
+**/libs/*
 .venv
 *egg-info*
-*build/*
+**/build/*
