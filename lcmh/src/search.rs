@@ -4,7 +4,7 @@ use rand_pcg::Pcg64Mcg;
 use crate::{
     c_interface::LcmhCostFunction,
     graph::{Graph, HashSet},
-    one_local_clifford::CliffordStack,
+    one_local_clifford::Clifford,
 };
 
 pub struct CoolingConfiguration {
@@ -13,25 +13,25 @@ pub struct CoolingConfiguration {
 }
 
 #[cfg_attr(test, derive(Debug))]
-pub struct CliffordStacks {
-    stacks: Vec<CliffordStack>,
+pub struct Cliffords {
+    stacks: Vec<Clifford>,
 }
 
 #[cfg_attr(test, derive(Debug))]
 pub struct SearchArtifacts {
-    pub clifford_stacks: CliffordStacks,
+    pub clifford_stacks: Cliffords,
     pub costs: Vec<f64>,
 }
 
-impl CliffordStacks {
-    pub fn into_data(self) -> Vec<CliffordStack> {
+impl Cliffords {
+    pub fn into_data(self) -> Vec<Clifford> {
         self.stacks
     }
 
     pub fn local_complementation(&mut self, node: usize, neighbours: &HashSet<usize>) {
-        self.stacks[node].push_r();
+        self.stacks[node].multiply_s_from_left();
         for neighbour in neighbours {
-            self.stacks[*neighbour].push_hsh();
+            self.stacks[*neighbour].multiply_hshx_from_left();
         }
     }
 }
@@ -49,8 +49,8 @@ pub fn search(
     };
 
     let mut artifacts = SearchArtifacts {
-        clifford_stacks: CliffordStacks {
-            stacks: Vec::from_iter((0..graph.num_nodes()).map(|_| CliffordStack::new())),
+        clifford_stacks: Cliffords {
+            stacks: Vec::from_iter((0..graph.num_nodes()).map(|_| Clifford::I)),
         },
         costs: Vec::new(),
     };

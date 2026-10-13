@@ -42,7 +42,7 @@ pub unsafe extern "C" fn lcmh_simpler_direct_search(
         .clifford_stacks
         .into_data()
         .into_iter()
-        .map(|stack| stack.into_clifford().into_cabaliser_encoding())
+        .map(|clifford| clifford.into_cabaliser_encoding())
         .enumerate()
     {
         // println!("{:?}", (i, clifford));

@@ -425,7 +425,7 @@ impl LcmhSearchArtifacts {
             .clifford_stacks
             .into_data()
             .into_iter()
-            .map(|stack| stack.into_clifford().into_cabaliser_encoding())
+            .map(|clifford| clifford.into_cabaliser_encoding())
             .collect::<Vec<_>>();
         let ops = ManuallyDrop::new(VecHelper::from_vec(ops));
         let costs = ManuallyDrop::new(VecHelper::from_vec(artifacts.costs));
