@@ -34,17 +34,6 @@ impl CliffordStacks {
             self.stacks[*neighbour].push_hsh();
         }
     }
-
-    pub fn inverse_local_complementation(
-        &mut self,
-        node: usize,
-        neighbours: &HashSet<usize>,
-    ) {
-        self.stacks[node].reset_push();
-        for neighbour in neighbours {
-            self.stacks[*neighbour].reset_push()
-        }
-    }
 }
 
 pub fn search(
@@ -100,12 +89,9 @@ fn mc_step(
     let num_nodes = graph.num_nodes();
     for _ in 0..num_nodes {
         let node = rng.random_range(0..num_nodes);
+        // this here will be inverted below if the step is rejected {{
         graph.local_complementation(node);
-        // the following will be inverted below if the step is rejected {{
         let neighbours = graph.get_neighbours(node).unwrap();
-        artifacts.clifford_stacks.local_complementation(node, neighbours);
-        // }}
-        // TODO: ask whether we rather want to use num_total_exact
         let new_cost = cost_function(graph);
         let delta_cost = new_cost - current_cost;
         if delta_cost < 0.0
@@ -114,10 +100,8 @@ fn mc_step(
         {
             current_cost = new_cost;
             artifacts.costs.push(current_cost);
+            artifacts.clifford_stacks.local_complementation(node, neighbours);
         } else {
-            artifacts
-                .clifford_stacks
-                .inverse_local_complementation(node, neighbours);
             graph.local_complementation(node);
         }
     }

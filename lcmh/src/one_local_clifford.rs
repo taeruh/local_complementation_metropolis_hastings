@@ -42,7 +42,6 @@ pub enum Clifford {
 #[cfg_attr(test, derive(Clone, PartialEq, Eq, Debug))]
 pub struct CliffordStack {
     clifford: Clifford,
-    prev_state: Clifford,
 }
 
 impl Clifford {
@@ -107,29 +106,20 @@ impl Clifford {
 
 impl CliffordStack {
     pub fn new() -> Self {
-        CliffordStack {
-            clifford: Clifford::I,
-            prev_state: Clifford::I,
-        }
+        CliffordStack { clifford: Clifford::I }
     }
 
     #[cfg(test)]
     fn new_with_clifford(clifford: Clifford) -> Self {
-        CliffordStack { clifford, prev_state: clifford }
+        CliffordStack { clifford }
     }
 
     pub fn push_r(&mut self) {
-        self.prev_state = self.clifford;
         self.clifford.multiply_sz();
     }
 
     pub fn push_hsh(&mut self) {
-        self.prev_state = self.clifford;
         self.clifford.multiply_hsh();
-    }
-
-    pub fn reset_push(&mut self) {
-        self.clifford = self.prev_state;
     }
 
     pub fn into_clifford(self) -> Clifford {
@@ -241,13 +231,6 @@ mod tests {
             false
         }
     }
-
-    const PAULI_I: Matrix = Matrix {
-        data: [
-            [Complex { real: 1.0, imag: 0.0 }, Complex { real: 0.0, imag: 0.0 }],
-            [Complex { real: 0.0, imag: 0.0 }, Complex { real: 1.0, imag: 0.0 }],
-        ],
-    };
 
     struct CliffordMatrixMap {
         map: HashMap<Clifford, Matrix>,
