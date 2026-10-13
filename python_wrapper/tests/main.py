@@ -82,27 +82,20 @@ if __name__ == "__main__":
     max_qubits = input_widget.get_max_qubits()
     output_widget = buffer_widget(n_qubits, max_qubits)
 
-    # output_widget.local_cliffords = None
-    # print(output_widget.get_local_cliffords().to_list())
-
-    # output_widget.tableau_print()
-
     input_slices = get_slices(input_widget)
     output_slices = get_slices(output_widget)
+    input_cliffords = get_cliffords(input_widget)
     output_cliffords = get_cliffords(output_widget)
 
 
     core_lib.core_lib.lcmh_simpler_direct_search(
-        n_qubits, input_slices, output_slices, output_cliffords
+        n_qubits, input_slices, output_slices, input_cliffords, output_cliffords
     )
-    output_widget.local_cliffords = None
-    print(output_widget.get_local_cliffords().to_list())
-    input_widget.local_cliffords = None
-    print(input_widget.get_local_cliffords().to_list())
 
-    # TODO: need to merge the cliffords
-
-    print()
     input_widget.tableau_print()
     print()
     output_widget.tableau_print()
+    print()
+    output_widget.local_cliffords = None
+    print(output_widget.get_local_cliffords().to_list())
+    print(input_widget.get_local_cliffords().to_list())

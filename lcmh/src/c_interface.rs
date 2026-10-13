@@ -50,7 +50,7 @@ pub(crate) mod clifford_transformation {
     const _HSHZ_: LcmhSingleQubitClifford = _RHS_;
 
     impl Clifford {
-        pub fn into_cabaliser_encoding(self) -> super::LcmhSingleQubitClifford {
+        pub fn into_cabaliser_encoding(self) -> LcmhSingleQubitClifford {
             match self {
                 Clifford::I => _I_,
                 Clifford::X => _X_,
@@ -76,6 +76,35 @@ pub(crate) mod clifford_transformation {
                 Clifford::HSHX => _HSHX_,
                 Clifford::HSHY => _HSHY_,
                 Clifford::HSHZ => _HSHZ_,
+            }
+        }
+        pub fn from_cabaliser_encoding(c: LcmhSingleQubitClifford) -> Self {
+            match c {
+                _I_ => Clifford::I,
+                _X_ => Clifford::X,
+                _Y_ => Clifford::Y,
+                _Z_ => Clifford::Z,
+                _S_ => Clifford::S,
+                _SX_ => Clifford::SX,
+                _SY_ => Clifford::SY,
+                _SZ_ => Clifford::SZ,
+                _H_ => Clifford::H,
+                _HX_ => Clifford::HX,
+                _HY_ => Clifford::HY,
+                _HZ_ => Clifford::HZ,
+                _SH_ => Clifford::SH,
+                _SHX_ => Clifford::SHX,
+                _SHY_ => Clifford::SHY,
+                _SHZ_ => Clifford::SHZ,
+                _HS_ => Clifford::HS,
+                _HSX_ => Clifford::HSX,
+                _HSY_ => Clifford::HSY,
+                _HSZ_ => Clifford::HSZ,
+                _HSH_ => Clifford::HSH,
+                _HSHX_ => Clifford::HSHX,
+                _HSHY_ => Clifford::HSHY,
+                _HSHZ_ => Clifford::HSHZ,
+                _ => unreachable!("unexpected encoding: {c}"),
             }
         }
     }
@@ -422,7 +451,7 @@ use vec_helper::VecHelper;
 impl LcmhSearchArtifacts {
     fn from_artifacts(artifacts: SearchArtifacts) -> Self {
         let ops = artifacts
-            .clifford_stacks
+            .cliffords
             .into_data()
             .into_iter()
             .map(|clifford| clifford.into_cabaliser_encoding())

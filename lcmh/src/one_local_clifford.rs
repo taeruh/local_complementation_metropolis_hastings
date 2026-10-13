@@ -101,7 +101,7 @@ impl Clifford {
         }
     }
 
-    fn multiply_h_from_right(&mut self) {
+    pub fn multiply_h_from_right(&mut self) {
         match *self {
             Clifford::I => *self = Clifford::H,
             Clifford::X => *self = Clifford::HZ,

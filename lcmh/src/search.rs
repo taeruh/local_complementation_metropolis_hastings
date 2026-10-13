@@ -14,24 +14,24 @@ pub struct CoolingConfiguration {
 
 #[cfg_attr(test, derive(Debug))]
 pub struct Cliffords {
-    stacks: Vec<Clifford>,
+    cliffords: Vec<Clifford>,
 }
 
 #[cfg_attr(test, derive(Debug))]
 pub struct SearchArtifacts {
-    pub clifford_stacks: Cliffords,
+    pub cliffords: Cliffords,
     pub costs: Vec<f64>,
 }
 
 impl Cliffords {
     pub fn into_data(self) -> Vec<Clifford> {
-        self.stacks
+        self.cliffords
     }
 
     pub fn local_complementation(&mut self, node: usize, neighbours: &HashSet<usize>) {
-        self.stacks[node].multiply_s_from_left();
+        self.cliffords[node].multiply_s_from_left();
         for neighbour in neighbours {
-            self.stacks[*neighbour].multiply_hshx_from_left();
+            self.cliffords[*neighbour].multiply_hshx_from_left();
         }
     }
 }
@@ -49,8 +49,8 @@ pub fn search(
     };
 
     let mut artifacts = SearchArtifacts {
-        clifford_stacks: Cliffords {
-            stacks: Vec::from_iter((0..graph.num_nodes()).map(|_| Clifford::I)),
+        cliffords: Cliffords {
+            cliffords: Vec::from_iter((0..graph.num_nodes()).map(|_| Clifford::I)),
         },
         costs: Vec::new(),
     };
@@ -100,7 +100,7 @@ fn mc_step(
         {
             current_cost = new_cost;
             artifacts.costs.push(current_cost);
-            artifacts.clifford_stacks.local_complementation(node, neighbours);
+            artifacts.cliffords.local_complementation(node, neighbours);
         } else {
             graph.local_complementation(node);
         }

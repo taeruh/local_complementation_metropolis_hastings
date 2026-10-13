@@ -15,4 +15,5 @@ core_lib.lcmh_simpler_direct_search.argtypes = [
     POINTER(POINTER(c_size_t)),
     POINTER(POINTER(c_size_t)),
     POINTER(c_byte),
+    POINTER(c_byte),
 ]
