@@ -389,12 +389,6 @@ pub type LcmhSingleQubitClifford = u8;
 // one vector per node (depending on how we want to use it in cababliser).
 #[repr(C)]
 pub struct LcmhSearchArtifacts {
-    /// The local Clifford operations for each node that transform the graph.
-    ///
-    /// The length of this array is equal to the number of nodes in the graph. The index
-    /// corresponds to the node index.
-    pub local_clifford_ops: *mut LcmhSingleQubitClifford,
-    pub length_local_clifford_ops: usize,
     /// The costs of all the intermediate (accepted) graphs.
     pub costs: *mut f64,
     pub length_costs: usize,
@@ -450,32 +444,36 @@ use vec_helper::VecHelper;
 
 impl LcmhSearchArtifacts {
     fn from_artifacts(artifacts: SearchArtifacts) -> Self {
-        let ops = artifacts
-            .cliffords
-            .into_data()
-            .into_iter()
-            .map(|clifford| clifford.into_cabaliser_encoding())
-            .collect::<Vec<_>>();
-        let ops = ManuallyDrop::new(VecHelper::from_vec(ops));
         let costs = ManuallyDrop::new(VecHelper::from_vec(artifacts.costs));
         Self {
-            local_clifford_ops: ops.get_ptr(),
-            length_local_clifford_ops: ops.get_length(),
             costs: costs.get_ptr(),
             length_costs: costs.get_length(),
         }
     }
 }
 
+
+    // /// The local Clifford operations for each node that transform the graph.
+    // ///
+    // /// The length of this array is equal to the number of nodes in the graph. The index
+    // /// corresponds to the node index.
+    // pub local_clifford_ops: *mut LcmhSingleQubitClifford,
+    // pub length_local_clifford_ops: usize,
+        // let ops = artifacts
+        //     .cliffords
+        //     .into_data()
+        //     .into_iter()
+        //     .map(|clifford| clifford.into_cabaliser_encoding())
+        //     .collect::<Vec<_>>();
+        // let ops = ManuallyDrop::new(VecHelper::from_vec(ops));
+        //     local_clifford_ops: ops.get_ptr(),
+        //     length_local_clifford_ops: ops.get_length(),
+
 impl Drop for LcmhSearchArtifacts {
     fn drop(&mut self) {
         // Safety: both possible creation methods ensure that the pointer is valid
         // for `length` elements and owns the memory.
         unsafe {
-            let _ = VecHelper::frow_raw_parts(
-                self.local_clifford_ops,
-                self.length_local_clifford_ops,
-            );
             let _ = VecHelper::frow_raw_parts(self.costs, self.length_costs);
         }
     }
@@ -524,12 +522,13 @@ pub extern "C" fn lcmh_search(
     seed_from_entropy: bool,
     seed: u64,
 ) -> LcmhSearchArtifacts {
-    let artifacts = search::search(
-        graph,
+    let (new_graph, _, artifacts) = search::search(
+        graph.clone(),
         cooling_config.into(),
         cost_function,
         opt_seed(seed_from_entropy, seed),
     );
+    *graph = new_graph;
     LcmhSearchArtifacts::from_artifacts(artifacts)
 }
 
@@ -569,13 +568,14 @@ pub unsafe extern "C" fn lcmh_direct_search(
     seed_from_entropy: bool,
     seed: u64,
     output_slices: *mut *mut u64,
+    output_cliffords: *mut LcmhSingleQubitClifford,
 ) -> LcmhSearchArtifacts {
     // Safety: this function assumes the same Safety guarantees `slices` as
     // [CabaliserGraph::new] for
     let c_graph = unsafe { CabaliserGraph::new(n_qubits, slices) };
-    let mut graph = CabaliserGraph::to_graph(c_graph);
-    let artifacts = search::search(
-        &mut graph,
+    let graph = CabaliserGraph::to_graph(c_graph);
+    let (graph, _, artifacts) = search::search(
+        graph,
         cooling_config.into(),
         cost_function,
         opt_seed(seed_from_entropy, seed),

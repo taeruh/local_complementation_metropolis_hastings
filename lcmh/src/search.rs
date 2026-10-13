@@ -13,13 +13,13 @@ pub struct CoolingConfiguration {
 }
 
 #[cfg_attr(test, derive(Debug))]
+#[derive(Clone)]
 pub struct Cliffords {
     cliffords: Vec<Clifford>,
 }
 
 #[cfg_attr(test, derive(Debug))]
 pub struct SearchArtifacts {
-    pub cliffords: Cliffords,
     pub costs: Vec<f64>,
 }
 
@@ -36,76 +36,103 @@ impl Cliffords {
     }
 }
 
+struct Search {
+    graph: Graph,
+    cliffords: Cliffords,
+    best_graph: Graph,
+    best_cliffords: Cliffords,
+    best_cost: f64,
+    cooling_config: CoolingConfiguration,
+    cost_function: LcmhCostFunction,
+    rng: Pcg64Mcg,
+    artifacts: SearchArtifacts,
+}
+
 pub fn search(
-    graph: &mut Graph,
+    graph: Graph,
     cooling_config: CoolingConfiguration,
     cost_function: LcmhCostFunction,
     seed: Option<u64>,
-) -> SearchArtifacts {
-    let mut rng = match seed {
-        Some(seed) => Pcg64Mcg::seed_from_u64(seed),
-        None => Pcg64Mcg::try_from_rng(&mut SysRng)
-            .expect("Failed to create random number generator from entropy"),
-    };
-
-    let mut artifacts = SearchArtifacts {
-        cliffords: Cliffords {
-            cliffords: Vec::from_iter((0..graph.num_nodes()).map(|_| Clifford::I)),
-        },
-        costs: Vec::new(),
-    };
-
-    let mut current_cost = cost_function(graph);
-    artifacts.costs.push(current_cost);
-
-    for (&beta, &num_steps) in cooling_config
-        .betas
-        .iter()
-        .zip(cooling_config.num_steps_per_beta.iter())
-    {
-        for _ in 0..num_steps {
-            current_cost = mc_step(
-                graph,
-                cost_function,
-                current_cost,
-                beta,
-                &mut artifacts,
-                &mut rng,
-            );
-        }
-    }
-
-    artifacts
+) -> (Graph, Cliffords, SearchArtifacts) {
+    let mut search = Search::new(graph, cooling_config, cost_function, seed);
+    search.search();
+    (search.best_graph, search.best_cliffords, search.artifacts)
 }
 
-fn mc_step(
-    graph: &mut Graph,
-    cost_function: LcmhCostFunction,
-    beta: f64,
-    mut current_cost: f64,
-    artifacts: &mut SearchArtifacts,
-    rng: &mut Pcg64Mcg,
-) -> f64 {
-    let num_nodes = graph.num_nodes();
-    for _ in 0..num_nodes {
-        let node = rng.random_range(0..num_nodes);
-        // this here will be inverted below if the step is rejected {{
-        graph.local_complementation(node);
-        let neighbours = graph.get_neighbours(node).unwrap();
-        let new_cost = cost_function(graph);
-        let delta_cost = new_cost - current_cost;
-        if delta_cost < 0.0
-            || rng.sample::<f64, StandardUniform>(StandardUniform)
-                < (-beta * delta_cost).exp()
-        {
-            current_cost = new_cost;
-            artifacts.costs.push(current_cost);
-            artifacts.cliffords.local_complementation(node, neighbours);
-        } else {
-            graph.local_complementation(node);
+impl Search {
+    fn new(
+        graph: Graph,
+        cooling_config: CoolingConfiguration,
+        cost_function: LcmhCostFunction,
+        seed: Option<u64>,
+    ) -> Self {
+        let rng = match seed {
+            Some(seed) => Pcg64Mcg::seed_from_u64(seed),
+            None => Pcg64Mcg::try_from_rng(&mut SysRng)
+                .expect("Failed to create random number generator from entropy"),
+        };
+        let cliffords = Cliffords {
+            cliffords: Vec::from_iter((0..graph.num_nodes()).map(|_| Clifford::I)),
+        };
+        let mut artifacts = SearchArtifacts { costs: Vec::new() };
+        let current_cost = cost_function(&graph);
+        artifacts.costs.push(current_cost);
+        let best_cost = current_cost;
+        Self {
+            best_graph: graph.clone(),
+            best_cliffords: cliffords.clone(),
+            best_cost,
+            graph,
+            cliffords,
+            cooling_config,
+            cost_function,
+            rng,
+            artifacts,
         }
     }
-    current_cost
+
+    fn search(&mut self) {
+        let mut current_cost = *self.artifacts.costs.last().unwrap();
+        for (beta, num_steps) in self
+            .cooling_config
+            .betas
+            .clone()
+            .into_iter()
+            .zip(self.cooling_config.num_steps_per_beta.clone())
+        {
+            for _ in 0..num_steps {
+                current_cost = self.mc_step(current_cost, beta);
+            }
+        }
+    }
+
+    fn mc_step(&mut self, beta: f64, mut current_cost: f64) -> f64 {
+        let num_nodes = self.graph.num_nodes();
+        for _ in 0..num_nodes {
+            let node = self.rng.random_range(0..num_nodes);
+            // this here will be inverted below if the step is rejected
+            self.graph.local_complementation(node);
+            let neighbours = self.graph.get_neighbours(node).unwrap();
+            let new_cost = (self.cost_function)(&self.graph);
+            let delta_cost = new_cost - current_cost;
+            if delta_cost < 0.0
+                || self.rng.sample::<f64, StandardUniform>(StandardUniform)
+                    < (-beta * delta_cost).exp()
+            {
+                self.artifacts.costs.push(current_cost);
+                self.cliffords.local_complementation(node, neighbours);
+                current_cost = new_cost;
+                if current_cost < self.best_cost {
+                    self.best_cost = current_cost;
+                    self.best_graph = self.graph.clone();
+                    self.best_cliffords = self.cliffords.clone();
+                }
+            } else {
+                self.graph.local_complementation(node);
+            }
+        }
+        current_cost
+    }
 }
 
 #[cfg(test)]
@@ -135,6 +162,6 @@ mod tests {
             num_steps_per_beta: vec![5, 5, 5],
         };
 
-        let _ = search(&mut graph, cooling_config, test_cost_function, None);
+        let _ = search(graph, cooling_config, test_cost_function, None);
     }
 }

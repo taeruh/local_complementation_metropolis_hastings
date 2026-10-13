@@ -31,12 +31,12 @@ pub unsafe extern "C" fn lcmh_simpler_direct_search(
     };
 
     let c_graph = unsafe { CabaliserGraph::new(n_qubits, slices) };
-    let mut graph = CabaliserGraph::to_graph(c_graph);
-    let artifacts = search::search(&mut graph, cooling_config, cost_function, None);
-    // let artifacts = search::search(&mut graph, cooling_config, cost_function, Some(0));
+    let graph = CabaliserGraph::to_graph(c_graph);
+    let (graph, corrections, _) =
+        search::search(graph, cooling_config, cost_function, None);
 
     unsafe { CabaliserGraph::from_graph(&graph, output_slices) };
-    for (i, mut clifford) in artifacts.cliffords.into_data().into_iter().enumerate() {
+    for (i, mut clifford) in corrections.into_data().into_iter().enumerate() {
         let base_correction = unsafe { *cliffords.add(i) };
         match Clifford::from_cabaliser_encoding(base_correction) {
             Clifford::I => {},
