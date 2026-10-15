@@ -2,7 +2,7 @@ use std::mem::ManuallyDrop;
 
 use crate::{
     one_local_clifford::Clifford,
-    search::{self, CoolingConfiguration, SearchArtifacts},
+    search::{self, Cliffords, CoolingConfiguration, SearchArtifacts},
 };
 
 // On most platforms (appartly, all that are currently supported by Rust) C's size_t is
@@ -428,25 +428,24 @@ unsafe fn search_helper(
     // [CabaliserGraph::new] for
     let c_graph = unsafe { CabaliserGraph::new(n_qubits, slices) };
     let graph = CabaliserGraph::to_graph(c_graph);
-    let (graph, corrections, artifacts) =
-        search::search(graph, cooling_config, cost_function, seed);
+    let mut base_cliffords = Vec::with_capacity(n_qubits);
+    for i in 0..n_qubits {
+        // Safety: corrections has a length of n_qubits, so i < n_qubits
+        let c_clifford = unsafe { *cliffords.add(i) };
+        base_cliffords.push(Clifford::from_cabaliser_encoding(c_clifford));
+    }
+    let (graph, corrections, artifacts) = search::search(
+        graph,
+        Cliffords::new(base_cliffords),
+        cooling_config,
+        cost_function,
+        seed,
+    );
     // Safety: this function assumes the same Safety guarantees `output_slices` as
     // [CabaliserGraph::from_graph] for `graph`.
     unsafe { CabaliserGraph::from_graph(&graph, output_slices) };
-    for (i, mut clifford) in corrections.into_data().into_iter().enumerate() {
+    for (i, clifford) in corrections.into_data().into_iter().enumerate() {
         // Safety: corrections has a length of n_qubits, so i < n_qubits
-        let base_correction = unsafe { *cliffords.add(i) };
-        match Clifford::from_cabaliser_encoding(base_correction) {
-            Clifford::I => {},
-            Clifford::H => clifford.multiply_h_from_right(),
-            Clifford::Z => clifford.multiply_z_from_right(),
-            _ => unreachable!(
-                "expected input correction to be I, Z or H, but got
-                {:?}",
-                Clifford::from_cabaliser_encoding(base_correction)
-            ),
-        }
-        // Safety: as above
         unsafe { *output_cliffords.add(i) = clifford.into_cabaliser_encoding() };
     }
     LcmhSearchArtifacts::from_artifacts(artifacts)

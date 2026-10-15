@@ -42,6 +42,35 @@ pub enum Clifford {
 }
 
 impl Clifford {
+    pub fn invert(&mut self) {
+        match *self {
+            Clifford::I => {},
+            Clifford::X => {},
+            Clifford::Y => {},
+            Clifford::Z => {},
+            Clifford::S => *self = Clifford::SZ,
+            Clifford::SX => *self = Clifford::SX,
+            Clifford::SY => *self = Clifford::SY,
+            Clifford::SZ => *self = Clifford::S,
+            Clifford::H => {},
+            Clifford::HX => *self = Clifford::HZ,
+            Clifford::HY => {},
+            Clifford::HZ => *self = Clifford::HX,
+            Clifford::SH => *self = Clifford::HSZ,
+            Clifford::SHX => *self = Clifford::HS,
+            Clifford::SHY => *self = Clifford::HSY,
+            Clifford::SHZ => *self = Clifford::HSX,
+            Clifford::HS => *self = Clifford::SHX,
+            Clifford::HSX => *self = Clifford::SHZ,
+            Clifford::HSY => *self = Clifford::SHY,
+            Clifford::HSZ => *self = Clifford::SH,
+            Clifford::HSH => *self = Clifford::HSHX,
+            Clifford::HSHX => *self = Clifford::HSH,
+            Clifford::HSHY => *self = Clifford::HSHY,
+            Clifford::HSHZ => *self = Clifford::HSHZ,
+        }
+    }
+
     pub fn multiply_s_from_left(&mut self) {
         match *self {
             Clifford::I => *self = Clifford::S,
@@ -100,61 +129,119 @@ impl Clifford {
         }
     }
 
-    pub fn multiply_h_from_right(&mut self) {
+    pub fn multiply_sz_from_right(&mut self) {
         match *self {
-            Clifford::I => *self = Clifford::H,
-            Clifford::X => *self = Clifford::HZ,
-            Clifford::Y => *self = Clifford::HY,
-            Clifford::Z => *self = Clifford::HX,
-            Clifford::S => *self = Clifford::SH,
-            Clifford::SX => *self = Clifford::SHZ,
-            Clifford::SY => *self = Clifford::SHY,
-            Clifford::SZ => *self = Clifford::SHX,
-            Clifford::H => *self = Clifford::I,
-            Clifford::HX => *self = Clifford::Z,
-            Clifford::HY => *self = Clifford::Y,
-            Clifford::HZ => *self = Clifford::X,
-            Clifford::SH => *self = Clifford::S,
-            Clifford::SHX => *self = Clifford::SZ,
-            Clifford::SHY => *self = Clifford::SY,
-            Clifford::SHZ => *self = Clifford::SX,
-            Clifford::HS => *self = Clifford::HSH,
-            Clifford::HSX => *self = Clifford::HSHZ,
-            Clifford::HSY => *self = Clifford::HSHY,
-            Clifford::HSZ => *self = Clifford::HSHX,
-            Clifford::HSH => *self = Clifford::HS,
-            Clifford::HSHX => *self = Clifford::HSZ,
-            Clifford::HSHY => *self = Clifford::HSY,
-            Clifford::HSHZ => *self = Clifford::HSX,
+            Clifford::I => *self = Clifford::SZ,
+            Clifford::X => *self = Clifford::SX,
+            Clifford::Y => *self = Clifford::SY,
+            Clifford::Z => *self = Clifford::S,
+            Clifford::S => *self = Clifford::I,
+            Clifford::SX => *self = Clifford::Y,
+            Clifford::SY => *self = Clifford::X,
+            Clifford::SZ => *self = Clifford::Z,
+            Clifford::H => *self = Clifford::HSZ,
+            Clifford::HX => *self = Clifford::HSX,
+            Clifford::HY => *self = Clifford::HSY,
+            Clifford::HZ => *self = Clifford::HS,
+            Clifford::SH => *self = Clifford::HSHY,
+            Clifford::SHX => *self = Clifford::HSH,
+            Clifford::SHY => *self = Clifford::HSHZ,
+            Clifford::SHZ => *self = Clifford::HSHX,
+            Clifford::HS => *self = Clifford::H,
+            Clifford::HSX => *self = Clifford::HY,
+            Clifford::HSY => *self = Clifford::HX,
+            Clifford::HSZ => *self = Clifford::HZ,
+            Clifford::HSH => *self = Clifford::SHY,
+            Clifford::HSHX => *self = Clifford::SH,
+            Clifford::HSHY => *self = Clifford::SHZ,
+            Clifford::HSHZ => *self = Clifford::SHX,
         }
     }
 
-    pub fn multiply_z_from_right(&mut self) {
+    pub fn multiply_s_from_right(&mut self) {
         match *self {
-            Clifford::I => *self = Clifford::Z,
-            Clifford::X => *self = Clifford::Y,
-            Clifford::Y => *self = Clifford::X,
-            Clifford::Z => *self = Clifford::I,
-            Clifford::S => *self = Clifford::SZ,
-            Clifford::SX => *self = Clifford::SY,
-            Clifford::SY => *self = Clifford::SX,
-            Clifford::SZ => *self = Clifford::S,
-            Clifford::H => *self = Clifford::HZ,
-            Clifford::HX => *self = Clifford::HY,
-            Clifford::HY => *self = Clifford::HX,
-            Clifford::HZ => *self = Clifford::H,
-            Clifford::SH => *self = Clifford::SHZ,
-            Clifford::SHX => *self = Clifford::SHY,
-            Clifford::SHY => *self = Clifford::SHX,
-            Clifford::SHZ => *self = Clifford::SH,
-            Clifford::HS => *self = Clifford::HSZ,
-            Clifford::HSX => *self = Clifford::HSY,
-            Clifford::HSY => *self = Clifford::HSX,
-            Clifford::HSZ => *self = Clifford::HS,
-            Clifford::HSH => *self = Clifford::HSHZ,
-            Clifford::HSHX => *self = Clifford::HSHY,
-            Clifford::HSHY => *self = Clifford::HSHX,
-            Clifford::HSHZ => *self = Clifford::HSH,
+            Clifford::I => *self = Clifford::S,
+            Clifford::X => *self = Clifford::SY,
+            Clifford::Y => *self = Clifford::SX,
+            Clifford::Z => *self = Clifford::SZ,
+            Clifford::S => *self = Clifford::Z,
+            Clifford::SX => *self = Clifford::X,
+            Clifford::SY => *self = Clifford::Y,
+            Clifford::SZ => *self = Clifford::I,
+            Clifford::H => *self = Clifford::HS,
+            Clifford::HX => *self = Clifford::HSY,
+            Clifford::HY => *self = Clifford::HSX,
+            Clifford::HZ => *self = Clifford::HSZ,
+            Clifford::SH => *self = Clifford::HSHX,
+            Clifford::SHX => *self = Clifford::HSHZ,
+            Clifford::SHY => *self = Clifford::HSH,
+            Clifford::SHZ => *self = Clifford::HSHY,
+            Clifford::HS => *self = Clifford::HZ,
+            Clifford::HSX => *self = Clifford::HX,
+            Clifford::HSY => *self = Clifford::HY,
+            Clifford::HSZ => *self = Clifford::H,
+            Clifford::HSH => *self = Clifford::SHX,
+            Clifford::HSHX => *self = Clifford::SHZ,
+            Clifford::HSHY => *self = Clifford::SH,
+            Clifford::HSHZ => *self = Clifford::SHY,
+        }
+    }
+
+    pub fn multiply_hsh_from_right(&mut self) {
+        match *self {
+            Clifford::I => *self = Clifford::HSH,
+            Clifford::X => *self = Clifford::HSHX,
+            Clifford::Y => *self = Clifford::HSHZ,
+            Clifford::Z => *self = Clifford::HSHY,
+            Clifford::S => *self = Clifford::HSZ,
+            Clifford::SX => *self = Clifford::HSY,
+            Clifford::SY => *self = Clifford::HS,
+            Clifford::SZ => *self = Clifford::HSX,
+            Clifford::H => *self = Clifford::SH,
+            Clifford::HX => *self = Clifford::SHX,
+            Clifford::HY => *self = Clifford::SHZ,
+            Clifford::HZ => *self = Clifford::SHY,
+            Clifford::SH => *self = Clifford::HX,
+            Clifford::SHX => *self = Clifford::H,
+            Clifford::SHY => *self = Clifford::HY,
+            Clifford::SHZ => *self = Clifford::HZ,
+            Clifford::HS => *self = Clifford::SZ,
+            Clifford::HSX => *self = Clifford::SY,
+            Clifford::HSY => *self = Clifford::S,
+            Clifford::HSZ => *self = Clifford::SX,
+            Clifford::HSH => *self = Clifford::X,
+            Clifford::HSHX => *self = Clifford::I,
+            Clifford::HSHY => *self = Clifford::Y,
+            Clifford::HSHZ => *self = Clifford::Z,
+        }
+    }
+
+    pub fn multiply_hshx_from_right(&mut self) {
+        match *self {
+            Clifford::I => *self = Clifford::HSHX,
+            Clifford::X => *self = Clifford::HSH,
+            Clifford::Y => *self = Clifford::HSHY,
+            Clifford::Z => *self = Clifford::HSHZ,
+            Clifford::S => *self = Clifford::HSY,
+            Clifford::SX => *self = Clifford::HSZ,
+            Clifford::SY => *self = Clifford::HSX,
+            Clifford::SZ => *self = Clifford::HS,
+            Clifford::H => *self = Clifford::SHX,
+            Clifford::HX => *self = Clifford::SH,
+            Clifford::HY => *self = Clifford::SHY,
+            Clifford::HZ => *self = Clifford::SHZ,
+            Clifford::SH => *self = Clifford::H,
+            Clifford::SHX => *self = Clifford::HX,
+            Clifford::SHY => *self = Clifford::HZ,
+            Clifford::SHZ => *self = Clifford::HY,
+            Clifford::HS => *self = Clifford::SY,
+            Clifford::HSX => *self = Clifford::SZ,
+            Clifford::HSY => *self = Clifford::SX,
+            Clifford::HSZ => *self = Clifford::S,
+            Clifford::HSH => *self = Clifford::I,
+            Clifford::HSHX => *self = Clifford::X,
+            Clifford::HSHY => *self = Clifford::Z,
+            Clifford::HSHZ => *self = Clifford::Y,
         }
     }
 }
@@ -373,6 +460,23 @@ mod tests {
                 // enum, we don't specify the discriminant values, so they count up from
                 // 0, and end at 23 as there are 24 variants.
                 unsafe { mem::transmute::<u8, Clifford>(clifford_discriminant) };
+
+            let mut inverse = clifford;
+            inverse.invert();
+            let clifford_matrix = clifford_matrix_map.map.get(&clifford).unwrap();
+            let inverse_matrix = clifford_matrix_map.map.get(&inverse).unwrap();
+            let product_matrix = clifford_matrix.multiply(inverse_matrix);
+            assert!(
+                product_matrix.is_equal_up_to_phase(
+                    clifford_matrix_map.map.get(&Clifford::I).unwrap()
+                ),
+                "Failed for clifford {:?} with inverse {:?}\nExpected identity Got \
+                 matrix:\n{:?}",
+                clifford,
+                inverse,
+                product_matrix.data
+            );
+
             let matrix = clifford_matrix_map.map.get(&clifford).unwrap();
             for (op, op_matrix, from_left, op_desc) in [
                 (
@@ -388,16 +492,28 @@ mod tests {
                     "hshx_from_left",
                 ),
                 (
-                    &Clifford::multiply_z_from_right as &dyn Fn(&mut Clifford),
-                    clifford_matrix_map.map.get(&Clifford::Z).unwrap(),
+                    &Clifford::multiply_sz_from_right as &dyn Fn(&mut Clifford),
+                    clifford_matrix_map.map.get(&Clifford::SZ).unwrap(),
                     false,
-                    "z_from_right",
+                    "sz_from_right",
                 ),
                 (
-                    &Clifford::multiply_h_from_right as &dyn Fn(&mut Clifford),
-                    clifford_matrix_map.map.get(&Clifford::H).unwrap(),
+                    &Clifford::multiply_hsh_from_right as &dyn Fn(&mut Clifford),
+                    clifford_matrix_map.map.get(&Clifford::HSH).unwrap(),
                     false,
-                    "h_from_right",
+                    "hsh_from_right",
+                ),
+                (
+                    &Clifford::multiply_s_from_right as &dyn Fn(&mut Clifford),
+                    clifford_matrix_map.map.get(&Clifford::S).unwrap(),
+                    false,
+                    "s_from_right",
+                ),
+                (
+                    &Clifford::multiply_hshx_from_right as &dyn Fn(&mut Clifford),
+                    clifford_matrix_map.map.get(&Clifford::HSHX).unwrap(),
+                    false,
+                    "hshx_from_right",
                 ),
             ] {
                 let matrix_result = if from_left {
