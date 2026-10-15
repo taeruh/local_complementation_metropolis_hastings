@@ -1,6 +1,9 @@
 use std::mem::ManuallyDrop;
 
-use crate::search::{self, CoolingConfiguration, SearchArtifacts};
+use crate::{
+    one_local_clifford::Clifford,
+    search::{self, CoolingConfiguration, SearchArtifacts},
+};
 
 // On most platforms (appartly, all that are currently supported by Rust) C's size_t is
 // equivalent to Rust's usize
@@ -228,82 +231,6 @@ pub(crate) use graph_transformation::CabaliserGraph;
 /// Use [lcmh_free_lcmh_graph] to free the according memory.
 pub type LcmhGraph = crate::graph::Graph;
 
-/// Transforms a Cabaliser graph into an LCMH graph.
-///
-/// Creates a new LCMH from the given number of qubits, `n_qubits` and
-/// the backing memory of the graph that is accessed via the `slices`. It is
-/// assumed that the graph is stored as a binary adjacency matrix, where each column
-/// can be accessed via the `slices` pointer, and each column-pointer then points to
-/// the 64-bit chunks that encode the column.
-///
-/// # Arguments
-/// - `n_qubits`: The number of qubits/nodes in the graph.
-/// - `slices`: A pointer to the backing memory of the graph
-///
-/// # Returns
-/// - a Box/pointer to the newly created LCMH graph.
-///
-/// # Safety
-/// `slices` must be initialised for `n_qubits` and each slice `slices[i]`
-/// must again be valid for `n_qubits`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn lcmh_transform_cabaliser_graph_to_lcmh_graph(
-    n_qubits: size_t,
-    slices: *mut *mut u64,
-) -> Box<LcmhGraph> {
-    let c_graph = unsafe { CabaliserGraph::new(n_qubits, slices) };
-    Box::new(CabaliserGraph::to_graph(c_graph))
-}
-
-/// Transforms an LCMH graph into a Cabaliser graph.
-///
-/// Creates a new Cabaliser graph from the given LCMH graph and writing into a backing
-/// memory accessed via the `slices_buffer`, assuming that the buffer is initialised with
-/// zeros; cf. [lcmh_transform_cabaliser_graph_to_lcmh_graph] for the encoding.
-///
-/// # Arguments
-/// - `graph`: The LCMH graph to be transformed.
-/// - `slices_buffer`: A pointer to the buffer memory where the Cabaliser graph will be
-///   written to.
-///
-/// # Returns
-/// - the number of nodes/qubits in the graph.
-///
-/// # Safety
-/// `slices_buffer` must be valid for `graph.num_nodes()` and each slice
-/// `slices_buffer[i]` must again be valid for `graph.num_nodes()`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn lcmh_transform_lcmh_graph_to_cabaliser_graph(
-    graph: &LcmhGraph,
-    // must be valid for `graph.num_nodes()` and initialised to zeros
-    slices_buffer: *mut *mut u64,
-) -> size_t {
-    unsafe { CabaliserGraph::from_graph(graph, slices_buffer) };
-    graph.num_nodes()
-}
-
-/// Clones the given LCMH graph.
-///
-/// # Arguments
-/// - `graph`: The LCMH graph to be cloned.
-///
-/// # Returns
-/// - a Box/pointer to the newly created LCMH graph.
-#[unsafe(no_mangle)]
-// pub extern "C" fn lcmh_clone_lcmh_graph(graph: &LcmhGraph) -> Box<LcmhGraph> {
-pub extern "C" fn lcmh_clone_lcmh_graph(graph: &LcmhGraph) -> Box<LcmhGraph> {
-    Box::new(graph.clone())
-}
-
-/// Frees the given LCMH graph.
-///
-/// # Arguments
-/// - `graph`: The LCMH graph to be freed.
-#[unsafe(no_mangle)]
-pub extern "C" fn lcmh_free_lcmh_graph(graph: Box<LcmhGraph>) {
-    drop(graph);
-}
-
 /// Get the number of nodes in the given LCMH graph.
 ///
 /// # Arguments
@@ -392,6 +319,8 @@ pub struct LcmhSearchArtifacts {
     /// The costs of all the intermediate (accepted) graphs.
     pub costs: *mut f64,
     pub length_costs: usize,
+    pub initial_cost: f64,
+    pub final_cost: f64,
 }
 
 mod vec_helper {
@@ -448,26 +377,11 @@ impl LcmhSearchArtifacts {
         Self {
             costs: costs.get_ptr(),
             length_costs: costs.get_length(),
+            initial_cost: artifacts.initial_cost,
+            final_cost: artifacts.best_cost,
         }
     }
 }
-
-
-    // /// The local Clifford operations for each node that transform the graph.
-    // ///
-    // /// The length of this array is equal to the number of nodes in the graph. The index
-    // /// corresponds to the node index.
-    // pub local_clifford_ops: *mut LcmhSingleQubitClifford,
-    // pub length_local_clifford_ops: usize,
-        // let ops = artifacts
-        //     .cliffords
-        //     .into_data()
-        //     .into_iter()
-        //     .map(|clifford| clifford.into_cabaliser_encoding())
-        //     .collect::<Vec<_>>();
-        // let ops = ManuallyDrop::new(VecHelper::from_vec(ops));
-        //     local_clifford_ops: ops.get_ptr(),
-        //     length_local_clifford_ops: ops.get_length(),
 
 impl Drop for LcmhSearchArtifacts {
     fn drop(&mut self) {
@@ -482,6 +396,7 @@ impl Drop for LcmhSearchArtifacts {
 /// Frees the given search artifacts.
 #[unsafe(no_mangle)]
 pub extern "C" fn lcmh_free_search_artifacts(artifacts: LcmhSearchArtifacts) {
+    // println!("Freeing search artifacts");
     drop(artifacts);
 }
 
@@ -498,37 +413,42 @@ fn opt_seed(seed_from_entropy: bool, seed: u64) -> Option<u64> {
     }
 }
 
-/// Performs the search changing the graph in-place.
-///
-/// ...
-///
-/// # Arguments
-/// - `graph`: The LCMH graph to be transformed.
-/// - `cooling_config`: The cooling configurations that are used for the MH search.
-/// - `cost_function`: The cost function (or energy function) that is used in the MH
-///   search.
-/// - `seed_from_entropy`: If true, the random number generator is seeded from entropy,
-///   otherwise the seed` is used.
-/// - `seed`: The seed for the random number generator if `seed_from_entropy` is false.
-///
-/// # Returns
-/// - Additional artifacts from the search, e.g., the local Clifford operations that
-///   transformed the graph.
-#[unsafe(no_mangle)]
-pub extern "C" fn lcmh_search(
-    graph: &mut LcmhGraph,
-    cooling_config: LcmhCoolingConfiguration,
+#[allow(clippy::too_many_arguments)]
+unsafe fn search_helper(
+    n_qubits: size_t,
+    slices: *mut *mut u64,
+    cliffords: *mut LcmhSingleQubitClifford,
+    output_slices: *mut *mut u64,
+    output_cliffords: *mut LcmhSingleQubitClifford,
+    cooling_config: CoolingConfiguration,
     cost_function: LcmhCostFunction,
-    seed_from_entropy: bool,
-    seed: u64,
+    seed: Option<u64>,
 ) -> LcmhSearchArtifacts {
-    let (new_graph, _, artifacts) = search::search(
-        graph.clone(),
-        cooling_config.into(),
-        cost_function,
-        opt_seed(seed_from_entropy, seed),
-    );
-    *graph = new_graph;
+    // Safety: this function assumes the same Safety guarantees `slices` as
+    // [CabaliserGraph::new] for
+    let c_graph = unsafe { CabaliserGraph::new(n_qubits, slices) };
+    let graph = CabaliserGraph::to_graph(c_graph);
+    let (graph, corrections, artifacts) =
+        search::search(graph, cooling_config, cost_function, seed);
+    // Safety: this function assumes the same Safety guarantees `output_slices` as
+    // [CabaliserGraph::from_graph] for `graph`.
+    unsafe { CabaliserGraph::from_graph(&graph, output_slices) };
+    for (i, mut clifford) in corrections.into_data().into_iter().enumerate() {
+        // Safety: corrections has a length of n_qubits, so i < n_qubits
+        let base_correction = unsafe { *cliffords.add(i) };
+        match Clifford::from_cabaliser_encoding(base_correction) {
+            Clifford::I => {},
+            Clifford::H => clifford.multiply_h_from_right(),
+            Clifford::Z => clifford.multiply_z_from_right(),
+            _ => unreachable!(
+                "expected input correction to be I, Z or H, but got
+                {:?}",
+                Clifford::from_cabaliser_encoding(base_correction)
+            ),
+        }
+        // Safety: as above
+        unsafe { *output_cliffords.add(i) = clifford.into_cabaliser_encoding() };
+    }
     LcmhSearchArtifacts::from_artifacts(artifacts)
 }
 
@@ -541,49 +461,198 @@ pub extern "C" fn lcmh_search(
 /// - `n_qubits`: The number of qubits/nodes in the graph.
 /// - `slices`: A pointer to the pointers that point to the column of the graph (cf. graph
 ///   representation in Cabaliser).
+/// - `cliffords`: A pointer to the original local Clifford corrections (they are assumed
+///   to be either I or H).
+/// - `output_slices`: A pointer to the pointers that point to the column of a
+///   *zero-initialised* buffer that is used to write the transformed graph into (cf. graph
+///   representation).
+/// - `output_cliffords`: A pointer to a buffer that is used to write the transformed
+///   local Clifford corrections into.
 /// - `cooling_config`: The cooling configurations that are used for the MH search.
 /// - `cost_function`: The cost function (or energy function) that is used in the MH
 ///   search.
 /// - `seed_from_entropy`: If true, the random number generator is seeded from entropy,
 ///   otherwise the seed` is used.
 /// - `seed`: The seed for the random number generator if `seed_from_entropy` is false.
-/// - `output_slices`: A pointer to the pointers that point to the column of a
-///   zero-initialised buffer that is used to write the transformed graph into (cf. graph
-///   representation).
 ///
 /// # Returns
-/// - Additional artifacts from the search, e.g., the local Clifford operations that
-///   transformed the graph.
+/// - Additional artifacts from the search, e.g., the cost for each accepted step.
 ///
 /// # Safety
-/// `slices` must be initialised for `n_qubits` and each slice `slices[i]` must again be
-/// valid for `n_qubits`. Similarly, `output_slices` must be valid for `n_qubits` and each
-/// slice `output_slices[i]` must again be valid for `n_qubits`.
+/// - `slices` must be initialised for `n_qubits` and each slice `slices[i]` must again be
+///   valid for `n_qubits`. Similarly, `output_slices` must be valid for `n_qubits` and
+///   each slice `output_slices[i]` must again be valid for `n_qubits`.
+/// - `cliffords` and `output_cliffords` must be valid for `n_qubits`.
+/// - The invariants of [LcmhCoolingConfiguration] must hold.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn lcmh_direct_search(
+pub unsafe extern "C" fn lcmh_search(
     n_qubits: size_t,
     slices: *mut *mut u64,
+    cliffords: *mut LcmhSingleQubitClifford,
+    output_slices: *mut *mut u64,
+    output_cliffords: *mut LcmhSingleQubitClifford,
     cooling_config: LcmhCoolingConfiguration,
     cost_function: LcmhCostFunction,
     seed_from_entropy: bool,
     seed: u64,
+) -> LcmhSearchArtifacts {
+    unsafe {
+        search_helper(
+            n_qubits,
+            slices,
+            cliffords,
+            output_slices,
+            output_cliffords,
+            cooling_config.into(),
+            cost_function,
+            opt_seed(seed_from_entropy, seed),
+        )
+    }
+}
+
+/// Same as [lcmh_search] but does not return any artifacts.
+///
+/// # Safety
+/// Sam as for [lcmh_search].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn lcmh_search_no_artifacts(
+    n_qubits: size_t,
+    slices: *mut *mut u64,
+    cliffords: *mut LcmhSingleQubitClifford,
+    output_slices: *mut *mut u64,
+    output_cliffords: *mut LcmhSingleQubitClifford,
+    cooling_config: LcmhCoolingConfiguration,
+    cost_function: LcmhCostFunction,
+    seed_from_entropy: bool,
+    seed: u64,
+) {
+    unsafe {
+        let _ = lcmh_search(
+            n_qubits,
+            slices,
+            cliffords,
+            output_slices,
+            output_cliffords,
+            cooling_config,
+            cost_function,
+            seed_from_entropy,
+            seed,
+        );
+    }
+}
+
+extern "C" fn default_cost_function(graph: &LcmhGraph) -> f64 {
+    graph.num_edges() as f64
+}
+
+fn get_default_cooling_config() -> CoolingConfiguration {
+    // not sure what a good default cooling schedule is ...
+    CoolingConfiguration {
+        betas: vec![1.0, 10.0, 100.0, 1000.0, 10000.0, 1.0, 10.0, 100.0, 1000.0, 10000.0],
+        num_steps_per_beta: vec![20, 20, 20, 20, 20, 20, 20, 20, 20, 20],
+    }
+}
+
+/// Same as [lcmh_search] but with defaults.
+///
+/// # Safety
+/// Sam as for [lcmh_search].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn lcmh_search_with_defaults(
+    n_qubits: size_t,
+    slices: *mut *mut u64,
+    cliffords: *mut LcmhSingleQubitClifford,
     output_slices: *mut *mut u64,
     output_cliffords: *mut LcmhSingleQubitClifford,
 ) -> LcmhSearchArtifacts {
-    // Safety: this function assumes the same Safety guarantees `slices` as
-    // [CabaliserGraph::new] for
-    let c_graph = unsafe { CabaliserGraph::new(n_qubits, slices) };
-    let graph = CabaliserGraph::to_graph(c_graph);
-    let (graph, _, artifacts) = search::search(
-        graph,
-        cooling_config.into(),
-        cost_function,
-        opt_seed(seed_from_entropy, seed),
-    );
-    // Safety: this function assumes the same Safety guarantees `output_slices` as
-    // [CabaliserGraph::from_graph] for `graph`
-    unsafe { CabaliserGraph::from_graph(&graph, output_slices) };
-    LcmhSearchArtifacts::from_artifacts(artifacts)
+    unsafe {
+        search_helper(
+            n_qubits,
+            slices,
+            cliffords,
+            output_slices,
+            output_cliffords,
+            get_default_cooling_config(),
+            default_cost_function,
+            None,
+        )
+    }
+}
+
+/// Same as [lcmh_search] but with defaults and no artifacts returned.
+///
+/// # Safety
+/// Sam as for [lcmh_search].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn lcmh_search_with_defaults_no_return(
+    n_qubits: size_t,
+    slices: *mut *mut u64,
+    cliffords: *mut LcmhSingleQubitClifford,
+    output_slices: *mut *mut u64,
+    output_cliffords: *mut LcmhSingleQubitClifford,
+) {
+    unsafe {
+        let _ = lcmh_search_with_defaults(
+            n_qubits,
+            slices,
+            cliffords,
+            output_slices,
+            output_cliffords,
+        );
+    }
+}
+
+/// Same as [lcmh_search] but with defaults, except for the cooling configuration.
+///
+/// # Safety
+/// Sam as for [lcmh_search].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn lcmh_search_with_defaults_except_cooling_config(
+    n_qubits: size_t,
+    slices: *mut *mut u64,
+    cliffords: *mut LcmhSingleQubitClifford,
+    output_slices: *mut *mut u64,
+    output_cliffords: *mut LcmhSingleQubitClifford,
+    cooling_config: LcmhCoolingConfiguration,
+) -> LcmhSearchArtifacts {
+    unsafe {
+        search_helper(
+            n_qubits,
+            slices,
+            cliffords,
+            output_slices,
+            output_cliffords,
+            cooling_config.into(),
+            default_cost_function,
+            None,
+        )
+    }
+}
+
+/// Same as [lcmh_search] but with defaults, except for the cooling configuration, and no
+/// artifacts returned.
+///
+/// # Safety
+/// Sam as for [lcmh_search].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn lcmh_search_with_defaults_except_cooling_config_no_return(
+    n_qubits: size_t,
+    slices: *mut *mut u64,
+    cliffords: *mut LcmhSingleQubitClifford,
+    output_slices: *mut *mut u64,
+    output_cliffords: *mut LcmhSingleQubitClifford,
+    cooling_config: LcmhCoolingConfiguration,
+) {
+    unsafe {
+        let _ = lcmh_search_with_defaults_except_cooling_config(
+            n_qubits,
+            slices,
+            cliffords,
+            output_slices,
+            output_cliffords,
+            cooling_config,
+        );
+    }
 }
 
 #[cfg(test)]

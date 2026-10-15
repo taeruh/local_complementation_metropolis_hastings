@@ -7,6 +7,7 @@ use crate::{
     one_local_clifford::Clifford,
 };
 
+#[derive(Debug)]
 pub struct CoolingConfiguration {
     pub betas: Vec<f64>,
     pub num_steps_per_beta: Vec<usize>,
@@ -21,6 +22,8 @@ pub struct Cliffords {
 #[cfg_attr(test, derive(Debug))]
 pub struct SearchArtifacts {
     pub costs: Vec<f64>,
+    pub initial_cost: f64,
+    pub best_cost: f64,
 }
 
 impl Cliffords {
@@ -74,8 +77,12 @@ impl Search {
         let cliffords = Cliffords {
             cliffords: Vec::from_iter((0..graph.num_nodes()).map(|_| Clifford::I)),
         };
-        let mut artifacts = SearchArtifacts { costs: Vec::new() };
         let current_cost = cost_function(&graph);
+        let mut artifacts = SearchArtifacts {
+            costs: Vec::new(),
+            initial_cost: current_cost,
+            best_cost: current_cost,
+        };
         artifacts.costs.push(current_cost);
         let best_cost = current_cost;
         Self {
@@ -101,9 +108,10 @@ impl Search {
             .zip(self.cooling_config.num_steps_per_beta.clone())
         {
             for _ in 0..num_steps {
-                current_cost = self.mc_step(current_cost, beta);
+                current_cost = self.mc_step(beta, current_cost);
             }
         }
+        self.artifacts.best_cost = self.best_cost;
     }
 
     fn mc_step(&mut self, beta: f64, mut current_cost: f64) -> f64 {
@@ -119,9 +127,9 @@ impl Search {
                 || self.rng.sample::<f64, StandardUniform>(StandardUniform)
                     < (-beta * delta_cost).exp()
             {
+                current_cost = new_cost;
                 self.artifacts.costs.push(current_cost);
                 self.cliffords.local_complementation(node, neighbours);
-                current_cost = new_cost;
                 if current_cost < self.best_cost {
                     self.best_cost = current_cost;
                     self.best_graph = self.graph.clone();

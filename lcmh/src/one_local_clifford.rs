@@ -41,7 +41,6 @@ pub enum Clifford {
     HSHZ,
 }
 
-
 impl Clifford {
     pub fn multiply_s_from_left(&mut self) {
         match *self {
@@ -129,8 +128,36 @@ impl Clifford {
             Clifford::HSHZ => *self = Clifford::HSX,
         }
     }
-}
 
+    pub fn multiply_z_from_right(&mut self) {
+        match *self {
+            Clifford::I => *self = Clifford::Z,
+            Clifford::X => *self = Clifford::Y,
+            Clifford::Y => *self = Clifford::X,
+            Clifford::Z => *self = Clifford::I,
+            Clifford::S => *self = Clifford::SZ,
+            Clifford::SX => *self = Clifford::SY,
+            Clifford::SY => *self = Clifford::SX,
+            Clifford::SZ => *self = Clifford::S,
+            Clifford::H => *self = Clifford::HZ,
+            Clifford::HX => *self = Clifford::HY,
+            Clifford::HY => *self = Clifford::HX,
+            Clifford::HZ => *self = Clifford::H,
+            Clifford::SH => *self = Clifford::SHZ,
+            Clifford::SHX => *self = Clifford::SHY,
+            Clifford::SHY => *self = Clifford::SHX,
+            Clifford::SHZ => *self = Clifford::SH,
+            Clifford::HS => *self = Clifford::HSZ,
+            Clifford::HSX => *self = Clifford::HSY,
+            Clifford::HSY => *self = Clifford::HSX,
+            Clifford::HSZ => *self = Clifford::HS,
+            Clifford::HSH => *self = Clifford::HSHZ,
+            Clifford::HSHX => *self = Clifford::HSHY,
+            Clifford::HSHY => *self = Clifford::HSHX,
+            Clifford::HSHZ => *self = Clifford::HSH,
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -350,11 +377,8 @@ mod tests {
             for (op, op_matrix, from_left, op_desc) in [
                 (
                     &Clifford::multiply_s_from_left as &dyn Fn(&mut Clifford),
-                    clifford_matrix_map
-                        .map
-                        .get(&Clifford::S)
-                        .unwrap(),
-                        true,
+                    clifford_matrix_map.map.get(&Clifford::S).unwrap(),
+                    true,
                     "s_from_left",
                 ),
                 (
@@ -362,6 +386,12 @@ mod tests {
                     clifford_matrix_map.map.get(&Clifford::HSHX).unwrap(),
                     true,
                     "hshx_from_left",
+                ),
+                (
+                    &Clifford::multiply_z_from_right as &dyn Fn(&mut Clifford),
+                    clifford_matrix_map.map.get(&Clifford::Z).unwrap(),
+                    false,
+                    "z_from_right",
                 ),
                 (
                     &Clifford::multiply_h_from_right as &dyn Fn(&mut Clifford),

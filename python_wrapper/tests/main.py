@@ -18,21 +18,30 @@ def toffoli_widget() -> Widget:
         return [
             (gates.RZ, (ctrl_a, _T_)),
             (gates.RZ, (ctrl_b, _T_)),
+            (gates.CNOT, (ctrl_b, targ)),
             (gates.H, (targ,)),
             (gates.CNOT, (ctrl_a, ctrl_b)),
             (gates.RZ, (targ, _T_)),
             (gates.CNOT, (ctrl_b, targ)),
             (gates.RZ, (ctrl_b, _Tdag_)),
+            (gates.CNOT, (ctrl_b, targ)),
             (gates.RZ, (targ, _T_)),
             (gates.CNOT, (ctrl_a, ctrl_b)),
             (gates.CNOT, (ctrl_b, targ)),
             (gates.CNOT, (ctrl_a, ctrl_b)),
+            (gates.CNOT, (ctrl_b, targ)),
             (gates.RZ, (targ, _Tdag_)),
             (gates.CNOT, (ctrl_b, targ)),
             (gates.CNOT, (ctrl_a, ctrl_b)),
             (gates.RZ, (targ, _Tdag_)),
             (gates.CNOT, (ctrl_b, targ)),
+            (gates.CNOT, (ctrl_a, ctrl_b)),
+            (gates.CNOT, (ctrl_b, targ)),
+            (gates.CNOT, (ctrl_a, ctrl_b)),
             (gates.H, (targ,)),
+            (gates.CNOT, (ctrl_a, ctrl_b)),
+            (gates.CNOT, (ctrl_b, targ)),
+            (gates.CNOT, (ctrl_a, ctrl_b)),
         ]
 
     toffoli = toffoli_gate(0, 1, 2)
@@ -68,12 +77,15 @@ class Tableau(Structure):
         ("orientation", c_bool),
     ]
 
+
 def get_slices(widget):
     tableau_ptr = ctypes.cast(widget.widget.contents.__tableau, POINTER(Tableau))
     return tableau_ptr.contents.slices_z  # I thought it was on the x slices ...?
 
+
 def get_cliffords(widget):
     return widget.widget.contents.queue.contents.cliffords
+
 
 if __name__ == "__main__":
     input_widget = toffoli_widget()
@@ -87,15 +99,29 @@ if __name__ == "__main__":
     input_cliffords = get_cliffords(input_widget)
     output_cliffords = get_cliffords(output_widget)
 
+    print(input_widget.get_local_cliffords().to_list())
 
-    core_lib.core_lib.lcmh_simpler_direct_search(
-        n_qubits, input_slices, output_slices, input_cliffords, output_cliffords
+    # # core_lib.core_lib.lcmh_search_with_defaults_no_return(
+    # artifacts = core_lib.core_lib.lcmh_search_with_defaults(
+    #     n_qubits, input_slices, input_cliffords, output_slices, output_cliffords
+    # )
+    artifacts = core_lib.core_lib.lcmh_search_with_defaults_except_cooling_config(
+        n_qubits,
+        input_slices,
+        input_cliffords,
+        output_slices,
+        output_cliffords,
+        core_lib.LcmhCoolingConfiguration([2.0, 100.0], [3, 3]),
     )
+
+    print(artifacts.initial_cost)
+    print(artifacts.final_cost)
+    print(artifacts.get_costs())
 
     input_widget.tableau_print()
     print()
     output_widget.tableau_print()
     print()
     output_widget.local_cliffords = None
-    print(output_widget.get_local_cliffords().to_list())
     print(input_widget.get_local_cliffords().to_list())
+    print(output_widget.get_local_cliffords().to_list())

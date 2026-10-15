@@ -1,7 +1,7 @@
 // The documentation is missing here for now; however, if you run `cargo doc` in
 // the lcmh directory and open `lcmh/target/doc/lcmh/c_interface/index.html` in
-// your browser, you'll find the according documentation there. However, with Rust syntax
-// instead of C syntax; the pointers translate as follows:
+// your browser, you'll find the according documentation there. However, with
+// Rust syntax instead of C syntax; the pointers translate as follows:
 // - `const T *`: `&T` or `*const T`
 // - `T *`: `Box<T>`, `&mut T` or `*mut T`
 // the integer types as:
@@ -14,16 +14,6 @@
 #include <stdint.h>
 
 typedef struct LcmhGraph LcmhGraph;
-
-LcmhGraph *lcmh_transform_cabaliser_graph_to_lcmh_graph(size_t n_qubits,
-                                                        uint64_t **slices);
-
-size_t lcmh_transform_lcmh_graph_to_cabaliser_graph(const LcmhGraph *graph,
-                                                    uint64_t **slices_buffer);
-
-LcmhGraph *lcmh_clone_lcmh_graph(const LcmhGraph *graph);
-
-void lcmh_free_lcmh_graph(LcmhGraph *graph);
 
 size_t lcmh_get_num_edges(const LcmhGraph *graph);
 
@@ -41,10 +31,10 @@ typedef struct LcmhCoolingConfiguration LcmhCoolingConfiguration;
 typedef uint8_t LcmhSingleQubitClifford;
 
 struct LcmhSearchArtifacts {
-  LcmhSingleQubitClifford *local_clifford_ops;
-  size_t length_local_clifford_ops;
   double *costs;
   size_t length_costs;
+  double initial_cost;
+  double final_cost;
 };
 typedef struct LcmhSearchArtifacts LcmhSearchArtifacts;
 
@@ -52,13 +42,36 @@ void lcmh_free_search_artifacts(LcmhSearchArtifacts artifacts);
 
 typedef double (*LcmhCostFunction)(const LcmhGraph *graph);
 
-LcmhSearchArtifacts lcmh_search(LcmhGraph *graph,
+LcmhSearchArtifacts lcmh_search(size_t n_qubits, uint64_t **slices,
+                                LcmhSingleQubitClifford *cliffords,
+                                uint64_t **output_slices,
+                                LcmhSingleQubitClifford *output_cliffords,
                                 LcmhCoolingConfiguration cooling_config,
                                 LcmhCostFunction cost_function,
                                 int seed_from_entropy, uint64_t seed);
 
-LcmhSearchArtifacts lcmh_direct_search(size_t n_qubits, uint64_t **slices,
-                                       LcmhCoolingConfiguration cooling_config,
-                                       LcmhCostFunction cost_function,
-                                       int seed_from_entropy, uint64_t seed,
-                                       uint64_t **output_slices);
+void lcmh_search_no_artifacts(size_t n_qubits, uint64_t **slices,
+                              LcmhSingleQubitClifford *cliffords,
+                              uint64_t **output_slices,
+                              LcmhSingleQubitClifford *output_cliffords,
+                              LcmhCoolingConfiguration cooling_config,
+                              LcmhCostFunction cost_function,
+                              int seed_from_entropy, uint64_t seed);
+
+LcmhSearchArtifacts lcmh_search_with_defaults(
+    size_t n_qubits, uint64_t **slices, LcmhSingleQubitClifford *cliffords,
+    uint64_t **output_slices, LcmhSingleQubitClifford *output_cliffords);
+
+void lcmh_search_with_defaults_no_return(
+    size_t n_qubits, uint64_t **slices, LcmhSingleQubitClifford *cliffords,
+    uint64_t **output_slices, LcmhSingleQubitClifford *output_cliffords);
+
+LcmhSearchArtifacts lcmh_search_with_defaults_except_cooling_config(
+    size_t n_qubits, uint64_t **slices, LcmhSingleQubitClifford *cliffords,
+    uint64_t **output_slices, LcmhSingleQubitClifford *output_cliffords,
+    LcmhCoolingConfiguration cooling_config);
+
+void lcmh_search_with_defaults_except_cooling_config_no_return(
+    size_t n_qubits, uint64_t **slices, LcmhSingleQubitClifford *cliffords,
+    uint64_t **output_slices, LcmhSingleQubitClifford *output_cliffords,
+    LcmhCoolingConfiguration cooling_config);
