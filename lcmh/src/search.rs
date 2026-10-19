@@ -1,10 +1,11 @@
-use rand::{RngExt, SeedableRng, distr::StandardUniform, rngs::SysRng};
+use rand::{RngExt, distr::StandardUniform};
 use rand_pcg::Pcg64Mcg;
 
 use crate::{
     c_interface::LcmhCostFunction,
     graph::{Graph, HashSet},
     one_local_clifford::Clifford,
+    stabiliser_group,
 };
 
 #[derive(Debug)]
@@ -14,8 +15,7 @@ pub struct CoolingConfiguration {
 }
 
 // TODO: make this here generic so that we don't have to copy when it comes from C
-#[cfg_attr(test, derive(Debug))]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Cliffords {
     cliffords: Vec<Clifford>,
 }
@@ -32,11 +32,30 @@ impl Cliffords {
         Self { cliffords }
     }
 
+    pub fn get_data(&self) -> &Vec<Clifford> {
+        &self.cliffords
+    }
+
     pub fn into_data(self) -> Vec<Clifford> {
         self.cliffords
     }
 
-    pub fn local_complementation(&mut self, node: usize, neighbours: &HashSet<usize>) {
+    // // never actually need it
+    //
+    // // assuming the graph is encoded on the z-block
+    // pub fn local_complementation(&mut self, node: usize, neighbours: &HashSet<usize>) {
+    //     self.cliffords[node].multiply_hsh_from_left();
+    //     for neighbour in neighbours {
+    //         self.cliffords[*neighbour].multiply_sz_from_left();
+    //     }
+    // }
+
+    // assuming the graph is encoded on the z-block
+    pub fn inverse_local_complementation(
+        &mut self,
+        node: usize,
+        neighbours: &HashSet<usize>,
+    ) {
         self.cliffords[node].multiply_hshx_from_right();
         for neighbour in neighbours {
             self.cliffords[*neighbour].multiply_s_from_right();
@@ -56,21 +75,37 @@ struct Search {
     artifacts: SearchArtifacts,
 }
 
+fn check_search_result(
+    graph: &Graph,
+    cliffords: &Cliffords,
+    best_graph: &Graph,
+    best_cliffords: &Cliffords,
+) {
+    println!("Checking search result");
+    println!("Initial graph:\n{graph:?}");
+    println!("Initial cliffords:\n{cliffords:?}");
+    println!("Best graph:\n{best_graph:?}");
+    println!("Best cliffords:\n{best_cliffords:?}");
+    let reduced_init = stabiliser_group::reduce(graph, cliffords.get_data());
+    let reduced_after = stabiliser_group::reduce(best_graph, best_cliffords.get_data());
+    assert_eq!(reduced_init, reduced_after);
+}
+
 pub fn search(
     graph: Graph,
-    mut cliffords: Cliffords,
+    cliffords: Cliffords,
     cooling_config: CoolingConfiguration,
     cost_function: LcmhCostFunction,
     seed: Option<u64>,
 ) -> (Graph, Cliffords, SearchArtifacts) {
-    // cliffords.cliffords.iter_mut().for_each(|c| {
-    //     c.invert();
-    // });
-    let mut search = Search::new(graph, cliffords, cooling_config, cost_function, seed);
+    let mut search = Search::new(graph.clone(), cliffords.clone(), cooling_config, cost_function, seed);
     search.search();
-    // search.best_cliffords.cliffords.iter_mut().for_each(|c| {
-    //     c.invert();
-    // });
+    check_search_result(
+        &graph,
+        &cliffords,
+        &search.best_graph,
+        &search.best_cliffords,
+    );
     (search.best_graph, search.best_cliffords, search.artifacts)
 }
 
@@ -82,11 +117,7 @@ impl Search {
         cost_function: LcmhCostFunction,
         seed: Option<u64>,
     ) -> Self {
-        let rng = match seed {
-            Some(seed) => Pcg64Mcg::seed_from_u64(seed),
-            None => Pcg64Mcg::try_from_rng(&mut SysRng)
-                .expect("Failed to create random number generator from entropy"),
-        };
+        let (rng, _) = crate::create_rng(seed);
         let current_cost = cost_function(&graph);
         let mut artifacts = SearchArtifacts {
             costs: Vec::new(),
@@ -130,7 +161,6 @@ impl Search {
             let node = self.rng.random_range(0..num_nodes);
             // this here will be inverted below if the step is rejected
             self.graph.local_complementation(node);
-            let neighbours = self.graph.get_neighbours(node).unwrap();
             let new_cost = (self.cost_function)(&self.graph);
             let delta_cost = new_cost - current_cost;
             if delta_cost < 0.0
@@ -139,7 +169,10 @@ impl Search {
             {
                 current_cost = new_cost;
                 self.artifacts.costs.push(current_cost);
-                self.cliffords.local_complementation(node, neighbours);
+                self.cliffords.inverse_local_complementation(
+                    node,
+                    self.graph.get_neighbours(node).unwrap(),
+                );
                 // println!("{:?}", node);
                 if current_cost < self.best_cost {
                     // println!("here");
@@ -158,6 +191,7 @@ impl Search {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::stabiliser_group;
 
     extern "C" fn test_cost_function(graph: &Graph) -> f64 {
         use crate::c_interface::lcmh_get_num_edges;
@@ -166,26 +200,22 @@ mod tests {
 
     #[test]
     fn test_search() {
-        let mut graph = Graph::new(5);
-        graph.add_edge(0, 1);
-        graph.add_edge(0, 3);
-        graph.add_edge(0, 4);
-        graph.add_edge(1, 2);
-        graph.add_edge(1, 3);
-        graph.add_edge(2, 4);
-        graph.add_edge(3, 4);
+        crate::tests::catch_seed_on_panic(None, |mut rng| {
+            let (graph, cliffords) = crate::tests::create_random_graph(&mut rng, 30);
+            let reduced_init = stabiliser_group::reduce(&graph, cliffords.get_data());
 
-        let cliffords = Cliffords {
-            cliffords: Vec::from_iter((0..graph.num_nodes()).map(|_| Clifford::I)),
-        };
+            let cooling_config = CoolingConfiguration {
+                betas: vec![0.1, 0.5, 10.0],
+                num_steps_per_beta: vec![5, 5, 5],
+            };
 
-        // println!("{:?}", graph);
+            let (best_graph, best_cliffords, artifacts) =
+                search(graph, cliffords, cooling_config, test_cost_function, None);
 
-        let cooling_config = CoolingConfiguration {
-            betas: vec![0.1, 0.5, 10.0],
-            num_steps_per_beta: vec![5, 5, 5],
-        };
-
-        let _ = search(graph, cliffords, cooling_config, test_cost_function, None);
+            let reduced_after =
+                stabiliser_group::reduce(&best_graph, best_cliffords.get_data());
+            assert_eq!(reduced_init, reduced_after);
+            assert!(artifacts.best_cost <= artifacts.initial_cost);
+        });
     }
 }

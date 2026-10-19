@@ -34,7 +34,7 @@ struct LcmhSearchArtifacts {
   double *costs;
   size_t length_costs;
   double initial_cost;
-  double final_cost;
+  double best_cost;
 };
 typedef struct LcmhSearchArtifacts LcmhSearchArtifacts;
 

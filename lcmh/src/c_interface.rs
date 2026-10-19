@@ -15,7 +15,7 @@ pub(crate) mod clifford_transformation {
     use crate::{c_interface::LcmhSingleQubitClifford, one_local_clifford::Clifford};
 
     // copy from cabaliser
-    const LOCAL_CLIFFORD_MASK: LcmhSingleQubitClifford = 1 << 5;
+    pub const LOCAL_CLIFFORD_MASK: LcmhSingleQubitClifford = 1 << 5;
     const _I_: LcmhSingleQubitClifford = LOCAL_CLIFFORD_MASK;
     const _X_: LcmhSingleQubitClifford = 0x01 | LOCAL_CLIFFORD_MASK;
     const _Y_: LcmhSingleQubitClifford = 0x02 | LOCAL_CLIFFORD_MASK;
@@ -51,6 +51,59 @@ pub(crate) mod clifford_transformation {
     const _HSHX_: LcmhSingleQubitClifford = _HRH_;
     const _HSHY_: LcmhSingleQubitClifford = _SHR_;
     const _HSHZ_: LcmhSingleQubitClifford = _RHS_;
+    #[cfg(test)]
+    pub fn check_translations() {
+        let clifford_matrix_map =
+            crate::one_local_clifford::tests::CliffordMatrixMap::new();
+
+        let r = clifford_matrix_map.get_matrix(&Clifford::SZ);
+        let h = clifford_matrix_map.get_matrix(&Clifford::H);
+        let s = clifford_matrix_map.get_matrix(&Clifford::S);
+        let y = clifford_matrix_map.get_matrix(&Clifford::Y);
+        let x = clifford_matrix_map.get_matrix(&Clifford::X);
+
+        assert!(
+            clifford_matrix_map
+                .get_matrix(&Clifford::SY)
+                .is_equal_up_to_phase(&r.multiply(x))
+        );
+        assert!(clifford_matrix_map.get_matrix(&Clifford::SZ).is_equal_up_to_phase(r));
+        assert!(
+            clifford_matrix_map
+                .get_matrix(&Clifford::SHX)
+                .is_equal_up_to_phase(&r.multiply(h))
+        );
+        assert!(
+            clifford_matrix_map
+                .get_matrix(&Clifford::SHZ)
+                .is_equal_up_to_phase(&r.multiply(h).multiply(y))
+        );
+        assert!(
+            clifford_matrix_map
+                .get_matrix(&Clifford::HSY)
+                .is_equal_up_to_phase(&h.multiply(r).multiply(x))
+        );
+        assert!(
+            clifford_matrix_map
+                .get_matrix(&Clifford::HSZ)
+                .is_equal_up_to_phase(&h.multiply(r))
+        );
+        assert!(
+            clifford_matrix_map
+                .get_matrix(&Clifford::HSHX)
+                .is_equal_up_to_phase(&h.multiply(r).multiply(h))
+        );
+        assert!(
+            clifford_matrix_map
+                .get_matrix(&Clifford::HSHY)
+                .is_equal_up_to_phase(&s.multiply(h).multiply(r))
+        );
+        assert!(
+            clifford_matrix_map
+                .get_matrix(&Clifford::HSHZ)
+                .is_equal_up_to_phase(&r.multiply(h).multiply(s))
+        );
+    }
 
     impl Clifford {
         pub fn into_cabaliser_encoding(self) -> LcmhSingleQubitClifford {
@@ -67,7 +120,7 @@ pub(crate) mod clifford_transformation {
                 Clifford::HX => _HX_,
                 Clifford::HY => _HY_,
                 Clifford::HZ => _HZ_,
-                Clifford::SH => _S_,
+                Clifford::SH => _SH_,
                 Clifford::SHX => _SHX_,
                 Clifford::SHY => _SHY_,
                 Clifford::SHZ => _SHZ_,
@@ -114,15 +167,16 @@ pub(crate) mod clifford_transformation {
 }
 
 mod graph_transformation {
-    use std::ops::BitOrAssign;
+    use std::ops::{BitOrAssign, BitXorAssign};
 
     use super::size_t;
     use crate::graph::Graph;
 
-    const CHUNK_SIZE: usize = 64;
+    pub const CHUNK_SIZE: usize = 64;
 
     /// A helper struct to access that graph data structure as they are represented in
     /// Cabaliser.
+    #[cfg_attr(test, derive(Clone))]
     pub struct CabaliserGraph {
         n_qubits: size_t,
         // do not wrap (the outer) pointer into a &ref because this requires quite a few
@@ -192,24 +246,51 @@ mod graph_transformation {
             graph
         }
 
-        /// Writes the given [Graph] into the given `slices_buffer` that is assumed to be
+        #[cfg(test)]
+        // the safety arguments are analougous to [Self::to_graph]
+        pub fn simpler_to_graph(c_graph: CabaliserGraph) -> Graph {
+            let mut graph = Graph::new(c_graph.n_qubits);
+            for i in 0..c_graph.n_qubits {
+                let slice = unsafe { *c_graph.slices.add(i) };
+                for j in 0..c_graph.n_qubits {
+                    let chunk = unsafe { *slice.add(j / CHUNK_SIZE) };
+                    if (chunk & (1 << (j % CHUNK_SIZE))) != 0 {
+                        graph.add_edge(i, j);
+                    }
+                }
+            }
+            graph
+        }
+
+        /// Writes the given [Graph] into the given `buffer_slices` that is assumed to be
         /// initalised with zeros.
         ///
         /// # Safety
-        /// `slices_buffer` must be valid for `graph.num_nodes()` and each slice
-        /// `slices_buffer[i]` must again be valid for `graph.num_nodes()`.
+        /// `buffer_slices` must be valid for `graph.num_nodes()` and each slice
+        /// `buffer_slices[i]` must again be valid for `graph.num_nodes()`.
         pub unsafe fn from_graph(
             graph: &Graph,
-            slices_buffer: *mut *mut u64,
+            buffer_slices: *mut *mut u64,
+            original_graph: Option<&Graph>,
         ) -> CabaliserGraph {
             let c_graph = CabaliserGraph {
                 n_qubits: graph.num_nodes(),
-                slices: slices_buffer,
+                slices: buffer_slices,
             };
+            if let Some(original_graph) = original_graph {
+                // cf. below for the safety arguments
+                for i in 0..graph.num_nodes() {
+                    let slice = unsafe { *c_graph.slices.add(i) };
+                    for &neighbour in original_graph.get_neighbours(i).unwrap() {
+                        let chunk = unsafe { &mut *slice.add(neighbour / CHUNK_SIZE) };
+                        chunk.bitxor_assign(1 << (neighbour % CHUNK_SIZE))
+                    }
+                }
+            }
             for i in 0..graph.num_nodes() {
                 // Safety: we have i < graph.num_nodes() <= graph.num_nodes - 1, which is
                 // a valid index
-                let slice = unsafe { *slices_buffer.add(i) };
+                let slice = unsafe { *c_graph.slices.add(i) };
                 for &neighbour in graph.get_neighbours(i).unwrap() {
                     // Safety: we have neighbour / CHUNK_SIZE < graph.num_nodes() /
                     // CHUNK_SIZE <= num_chunks - 1 = last_chunk_idx, which is a valid
@@ -312,15 +393,13 @@ pub type LcmhSingleQubitClifford = u8;
 ///
 /// # Garbage collection
 /// Use [lcmh_free_search_artifacts] to free the according memory.
-// TODO: Probably change this here to an analogous version of [SearchArtifacts] which uses
-// one vector per node (depending on how we want to use it in cababliser).
 #[repr(C)]
 pub struct LcmhSearchArtifacts {
     /// The costs of all the intermediate (accepted) graphs.
     pub costs: *mut f64,
     pub length_costs: usize,
     pub initial_cost: f64,
-    pub final_cost: f64,
+    pub best_cost: f64,
 }
 
 mod vec_helper {
@@ -378,7 +457,7 @@ impl LcmhSearchArtifacts {
             costs: costs.get_ptr(),
             length_costs: costs.get_length(),
             initial_cost: artifacts.initial_cost,
-            final_cost: artifacts.best_cost,
+            best_cost: artifacts.best_cost,
         }
     }
 }
@@ -427,7 +506,7 @@ unsafe fn search_helper(
     // Safety: this function assumes the same Safety guarantees `slices` as
     // [CabaliserGraph::new] for
     let c_graph = unsafe { CabaliserGraph::new(n_qubits, slices) };
-    let graph = CabaliserGraph::to_graph(c_graph);
+    let original_graph = CabaliserGraph::to_graph(c_graph);
     let mut base_cliffords = Vec::with_capacity(n_qubits);
     for i in 0..n_qubits {
         // Safety: corrections has a length of n_qubits, so i < n_qubits
@@ -435,7 +514,7 @@ unsafe fn search_helper(
         base_cliffords.push(Clifford::from_cabaliser_encoding(c_clifford));
     }
     let (graph, corrections, artifacts) = search::search(
-        graph,
+        original_graph.clone(),
         Cliffords::new(base_cliffords),
         cooling_config,
         cost_function,
@@ -443,7 +522,8 @@ unsafe fn search_helper(
     );
     // Safety: this function assumes the same Safety guarantees `output_slices` as
     // [CabaliserGraph::from_graph] for `graph`.
-    unsafe { CabaliserGraph::from_graph(&graph, output_slices) };
+    // unsafe { CabaliserGraph::from_graph(&graph, output_slices) };
+    unsafe { CabaliserGraph::from_graph(&graph, output_slices, Some(&original_graph)) };
     for (i, clifford) in corrections.into_data().into_iter().enumerate() {
         // Safety: corrections has a length of n_qubits, so i < n_qubits
         unsafe { *output_cliffords.add(i) = clifford.into_cabaliser_encoding() };
@@ -656,6 +736,70 @@ pub unsafe extern "C" fn lcmh_search_with_defaults_except_cooling_config_no_retu
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::{
+        c_interface::graph_transformation::CHUNK_SIZE, one_local_clifford::Clifford,
+    };
+
     #[test]
-    fn test() {}
+    fn check_translations() {
+        super::clifford_transformation::check_translations();
+    }
+
+    #[test]
+    fn invert_encoding() {
+        for cliff in 0..24 {
+            let clifford = Clifford::from_discriminant(cliff);
+            assert_eq!(
+                clifford,
+                Clifford::from_cabaliser_encoding(clifford.into_cabaliser_encoding())
+            );
+            let cliff = cliff | super::clifford_transformation::LOCAL_CLIFFORD_MASK;
+            assert_eq!(
+                cliff,
+                Clifford::from_cabaliser_encoding(cliff).into_cabaliser_encoding()
+            );
+        }
+    }
+
+    #[test]
+    fn graph_tranformations() {
+        crate::tests::catch_seed_on_panic(None, |mut rng| {
+            let (graph, _) = crate::tests::create_random_graph(&mut rng, 50);
+            let num_nodes = graph.num_nodes();
+            #[allow(clippy::manual_div_ceil)]
+            let chunks_per_column = (num_nodes + CHUNK_SIZE - 1) / CHUNK_SIZE;
+            let slices_buffer = vec![0.0; num_nodes * chunks_per_column];
+            let (slices_buffer_ptr, slices_buffer_len, slices_buffer_cap) =
+                slices_buffer.into_raw_parts();
+            let mut buffer_slices: Vec<*mut u64> = Vec::with_capacity(num_nodes);
+            for i in 0..num_nodes {
+                let slice_ptr =
+                    unsafe { slices_buffer_ptr.add(i * chunks_per_column) as *mut u64 };
+                buffer_slices.push(slice_ptr);
+            }
+            let buffer_slices_ptr = buffer_slices.as_mut_ptr();
+
+            let c_graph = unsafe {
+                graph_transformation::CabaliserGraph::from_graph(
+                    &graph,
+                    buffer_slices_ptr,
+                    None,
+                )
+            };
+            let graph_from_c_graph =
+                graph_transformation::CabaliserGraph::simpler_to_graph(c_graph.clone());
+            assert_eq!(graph, graph_from_c_graph);
+            let graph_from_c_graph =
+                graph_transformation::CabaliserGraph::to_graph(c_graph);
+            assert_eq!(graph, graph_from_c_graph);
+            let _ = unsafe {
+                Vec::from_raw_parts(
+                    slices_buffer_ptr,
+                    slices_buffer_len,
+                    slices_buffer_cap,
+                )
+            };
+        });
+    }
 }

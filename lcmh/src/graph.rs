@@ -5,6 +5,7 @@ use rustc_hash::FxHasher;
 pub type HashSet<T> = collections::HashSet<T, BuildHasherDefault<FxHasher>>;
 
 #[derive(Debug, Clone)]
+#[cfg_attr(test, derive(PartialEq))]
 pub struct Graph {
     nodes: Vec<HashSet<usize>>,
 }
