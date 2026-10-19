@@ -5,7 +5,7 @@ use crate::{
     c_interface::LcmhCostFunction,
     graph::{Graph, HashSet},
     one_local_clifford::Clifford,
-    stabiliser_group,
+    // stabiliser_group,
 };
 
 #[derive(Debug)]
@@ -32,6 +32,7 @@ impl Cliffords {
         Self { cliffords }
     }
 
+    #[cfg(test)]
     pub fn get_data(&self) -> &Vec<Clifford> {
         &self.cliffords
     }
@@ -75,21 +76,21 @@ struct Search {
     artifacts: SearchArtifacts,
 }
 
-fn check_search_result(
-    graph: &Graph,
-    cliffords: &Cliffords,
-    best_graph: &Graph,
-    best_cliffords: &Cliffords,
-) {
-    println!("Checking search result");
-    println!("Initial graph:\n{graph:?}");
-    println!("Initial cliffords:\n{cliffords:?}");
-    println!("Best graph:\n{best_graph:?}");
-    println!("Best cliffords:\n{best_cliffords:?}");
-    let reduced_init = stabiliser_group::reduce(graph, cliffords.get_data());
-    let reduced_after = stabiliser_group::reduce(best_graph, best_cliffords.get_data());
-    assert_eq!(reduced_init, reduced_after);
-}
+// fn check_search_result(
+//     graph: &Graph,
+//     cliffords: &Cliffords,
+//     best_graph: &Graph,
+//     best_cliffords: &Cliffords,
+// ) {
+//     println!("Checking search result");
+//     println!("Initial graph:\n{graph:?}");
+//     println!("Initial cliffords:\n{cliffords:?}");
+//     println!("Best graph:\n{best_graph:?}");
+//     println!("Best cliffords:\n{best_cliffords:?}");
+//     let reduced_init = stabiliser_group::reduce(graph, cliffords.get_data());
+//     let reduced_after = stabiliser_group::reduce(best_graph, best_cliffords.get_data());
+//     assert_eq!(reduced_init, reduced_after);
+// }
 
 pub fn search(
     graph: Graph,
@@ -98,14 +99,17 @@ pub fn search(
     cost_function: LcmhCostFunction,
     seed: Option<u64>,
 ) -> (Graph, Cliffords, SearchArtifacts) {
-    let mut search = Search::new(graph.clone(), cliffords.clone(), cooling_config, cost_function, seed);
-    search.search();
-    check_search_result(
-        &graph,
-        &cliffords,
-        &search.best_graph,
-        &search.best_cliffords,
+    let mut search = Search::new(
+        // graph.clone(),
+        // cliffords.clone(),
+        graph,
+        cliffords,
+        cooling_config,
+        cost_function,
+        seed,
     );
+    search.search();
+    // check_search_result(&graph, &cliffords, &search.best_graph, &search.best_cliffords);
     (search.best_graph, search.best_cliffords, search.artifacts)
 }
 

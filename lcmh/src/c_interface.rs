@@ -522,8 +522,8 @@ unsafe fn search_helper(
     );
     // Safety: this function assumes the same Safety guarantees `output_slices` as
     // [CabaliserGraph::from_graph] for `graph`.
-    // unsafe { CabaliserGraph::from_graph(&graph, output_slices) };
-    unsafe { CabaliserGraph::from_graph(&graph, output_slices, Some(&original_graph)) };
+    // unsafe { CabaliserGraph::from_graph(&graph, output_slices, Some(&original_graph)) };
+    unsafe { CabaliserGraph::from_graph(&graph, output_slices, None) };
     for (i, clifford) in corrections.into_data().into_iter().enumerate() {
         // Safety: corrections has a length of n_qubits, so i < n_qubits
         unsafe { *output_cliffords.add(i) = clifford.into_cabaliser_encoding() };

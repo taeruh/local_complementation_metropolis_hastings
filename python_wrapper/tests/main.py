@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 
 import ctypes
-from ctypes import Structure, POINTER, c_uint64, c_size_t, c_void_p, c_bool
 import numpy as np
 from math import isnan
 from itertools import chain
 from lcmh import core_lib
+from lcmh.cabaliser_interface_helper import WidgetAlias, WidgetPtrCopy
 from cabaliser.widget import Widget
 from cabaliser.structs import WidgetType
 from cabaliser import gates
@@ -36,51 +36,14 @@ def some_widget() -> Widget:
     return wid
 
 
-# def buffer_widget(n_qubits, max_qubits) -> Widget:
-#     wid = Widget(n_qubits, max_qubits, n_inputs=0)
-#     wid.decompose()
-#     return wid
-
-
 def buffer_widget(n_qubits, max_qubits) -> Widget:
-    wid = some_widget()
+    wid = Widget(n_qubits, max_qubits, n_inputs=0)
+    wid.decompose()
     return wid
 
 
-class Tableau(Structure):
-    _fields_ = [
-        ("n_qubits", c_size_t),
-        ("slice_len", c_size_t),
-        ("chunks", c_void_p),
-        ("slices_x", POINTER(POINTER(c_uint64))),
-        ("slices_z", POINTER(POINTER(c_uint64))),
-        ("phases", POINTER(c_uint64)),
-        ("orientation", c_bool),
-    ]
-
-
-def get_tableau_from_widget(widget: Widget):
-    return ctypes.cast(widget.widget.contents.__tableau, POINTER(Tableau))
-
-
-class WidgetAlias:
-    def __init__(self, widget: Widget):
-        self.widget = widget
-        self.tableau = get_tableau_from_widget(widget)
-        self.queue = widget.widget.contents.queue
-
-    def update(self, widget: WidgetPtrCopy):
-        self.tableau.contents.slices_z = widget.slices
-        self.queue.contents.cliffords = widget.cliffords
-        self.widget.local_cliffords = None
-
-
-class WidgetPtrCopy:
-    def __init__(self, widget: WidgetAlias):
-        self.slices = ctypes.pointer(widget.tableau.contents.slices_z.contents)
-        self.cliffords = ctypes.pointer(widget.queue.contents.cliffords.contents)
-
 EPS = 1e-6
+
 
 def main():
     input_widget = some_widget()
@@ -101,18 +64,7 @@ def main():
         output_copy.cliffords,
     )
 
-    print(artifacts.initial_cost)
-    print(artifacts.final_cost)
-
-    input_widget.tableau_print()
-    print()
-    output_widget.tableau_print()
-    print()
-    output_widget.local_cliffords = None
-    print(input_widget.get_local_cliffords().to_list())
-    print(output_widget.get_local_cliffords().to_list())
-    print()
-
+    # for i in range(5):
     for i in range(1):
         print(i)
         input_state = local_simulator.kr(
@@ -125,23 +77,14 @@ def main():
             # local_simulator.state_prep(*list(np.random.random(2))),
             # local_simulator.state_prep(*list(np.random.random(2))),
         )
-
         input_widget_state = local_simulator.simulate_widget(
             input_widget, input_state=input_state, trace_graph=True
         )
+        input_alias.update(output_copy)
         output_widget_state = local_simulator.simulate_widget(
-            output_widget, input_state=input_state, trace_graph=True
+            input_widget, input_state=input_state, trace_graph=True
         )
-
-        # input_alias.update(output_copy)
-        # # input_widget.tableau_print()
-        # # print(input_widget.get_local_cliffords().to_list())
-        # output_widget_state = local_simulator.simulate_widget(
-        #     input_widget, input_state=input_state, trace_graph=True
-        # )
-        # input_alias.update(input_copy)
-        # # input_widget.tableau_print()
-        # # print(input_widget.get_local_cliffords().to_list())
+        input_alias.update(input_copy)
 
         dephase(input_widget_state)
         dephase(output_widget_state)

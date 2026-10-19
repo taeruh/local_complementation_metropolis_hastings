@@ -1,3 +1,9 @@
+# The documentation is missing here for now; however, if you run `cargo doc` in
+# the lcmh directory and open `lcmh/target/doc/lcmh/c_interface/index.html` in
+# your browser, you'll find the according documentation there. However, with
+# Rust syntax Python syntax...
+
+
 from ctypes import (
     POINTER,
     c_size_t,
@@ -19,7 +25,7 @@ class LcmhSearchArtifacts(Structure):
         ("_costs", POINTER(c_double)),
         ("_length_costs", c_size_t),
         ("initial_cost", c_double),
-        ("final_cost", c_double),
+        ("best_cost", c_double),
     ]
 
     def get_costs(self):
@@ -27,14 +33,6 @@ class LcmhSearchArtifacts(Structure):
 
     def __del__(self):
         core_lib.lcmh_free_search_artifacts(self)
-
-
-# struct LcmhCoolingConfiguration {
-#   size_t num_betas;
-#   double const *betas;
-#   size_t const *num_steps_per_beta;
-# };
-# typedef struct LcmhCoolingConfiguration LcmhCoolingConfiguration;
 
 
 class LcmhCoolingConfiguration(Structure):
@@ -55,7 +53,8 @@ class LcmhCoolingConfiguration(Structure):
         )
 
 
-core_lib.lcmh_search_with_defaults_no_return.argtypes = [
+lcmh_search_with_defaults_no_return = core_lib.lcmh_search_with_defaults_no_return
+lcmh_search_with_defaults_no_return.argtypes = [
     c_size_t,
     POINTER(POINTER(c_size_t)),
     POINTER(c_byte),
@@ -63,16 +62,20 @@ core_lib.lcmh_search_with_defaults_no_return.argtypes = [
     POINTER(c_byte),
 ]
 
-core_lib.lcmh_search_with_defaults.argtypes = [
+lcmh_search_with_defaults = core_lib.lcmh_search_with_defaults
+lcmh_search_with_defaults.argtypes = [
     c_size_t,
     POINTER(POINTER(c_size_t)),
     POINTER(c_byte),
     POINTER(POINTER(c_size_t)),
     POINTER(c_byte),
 ]
-core_lib.lcmh_search_with_defaults.restype = LcmhSearchArtifacts
+lcmh_search_with_defaults.restype = LcmhSearchArtifacts
 
-core_lib.lcmh_search_with_defaults_except_cooling_config_no_return.argtypes = [
+lcmh_search_with_defaults_except_cooling_config_no_return = (
+    core_lib.lcmh_search_with_defaults_except_cooling_config_no_return
+)
+lcmh_search_with_defaults_except_cooling_config_no_return.argtypes = [
     c_size_t,
     POINTER(POINTER(c_size_t)),
     POINTER(c_byte),
@@ -81,7 +84,10 @@ core_lib.lcmh_search_with_defaults_except_cooling_config_no_return.argtypes = [
     LcmhCoolingConfiguration,
 ]
 
-core_lib.lcmh_search_with_defaults_except_cooling_config.argtypes = [
+lcmh_search_with_defaults_except_cooling_config = (
+    core_lib.lcmh_search_with_defaults_except_cooling_config
+)
+lcmh_search_with_defaults_except_cooling_config.argtypes = [
     c_size_t,
     POINTER(POINTER(c_size_t)),
     POINTER(c_byte),
@@ -89,4 +95,4 @@ core_lib.lcmh_search_with_defaults_except_cooling_config.argtypes = [
     POINTER(c_byte),
     LcmhCoolingConfiguration,
 ]
-core_lib.lcmh_search_with_defaults_except_cooling_config.restype = LcmhSearchArtifacts
+lcmh_search_with_defaults_except_cooling_config.restype = LcmhSearchArtifacts

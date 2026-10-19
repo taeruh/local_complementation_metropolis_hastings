@@ -8,6 +8,7 @@ graph(state). The goal is to integrate this into Cabaliser.
 - The header file is located at `./c_lib/include/lcmh.h`.
 - Building the dynamic and static libraries can be done via `make build`; the files will
 be located in `./c_lib/libs/`. This requires a Rust toolchain to be installed.
+- Cf. the makefile in the `python_wrapper/` directory for building the Python wrapper.
 
 ### Build Requirements and Dependencies
 

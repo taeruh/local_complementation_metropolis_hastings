@@ -8,6 +8,7 @@ pub mod c_interface;
 mod graph;
 mod one_local_clifford;
 mod search;
+#[cfg(test)]
 mod stabiliser_group;
 
 fn create_rng(seed: Option<u64>) -> (Pcg64Mcg, u64) {
