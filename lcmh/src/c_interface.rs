@@ -167,7 +167,7 @@ pub(crate) mod clifford_transformation {
 }
 
 mod graph_transformation {
-    use std::ops::{BitOrAssign, BitXorAssign};
+    use std::ops::BitOrAssign;
 
     use super::size_t;
     use crate::graph::Graph;
@@ -176,12 +176,12 @@ mod graph_transformation {
 
     /// A helper struct to access that graph data structure as they are represented in
     /// Cabaliser.
-    #[cfg_attr(test, derive(Clone))]
+    #[cfg_attr(test, derive(Debug))]
     pub struct CabaliserGraph {
-        n_qubits: size_t,
+        pub n_qubits: size_t,
         // do not wrap (the outer) pointer into a &ref because this requires quite a few
         // guarantees that I don't want to enforce here for simplicity.
-        slices: *mut *mut u64,
+        pub slices: *mut *mut u64,
     }
 
     impl CabaliserGraph {
@@ -196,17 +196,17 @@ mod graph_transformation {
         }
 
         /// Builds a [Graph] from the given [CabaliserGraph].
-        pub fn to_graph(c_graph: CabaliserGraph) -> Graph {
-            if c_graph.n_qubits == 0 {
+        pub fn mut_to_graph_and_flush(&mut self) -> Graph {
+            if self.n_qubits == 0 {
                 return Graph::new(0);
             }
 
-            let num_chunks = c_graph.n_qubits.div_ceil(CHUNK_SIZE);
+            let num_chunks = self.n_qubits.div_ceil(CHUNK_SIZE);
             // note (for below) that this index points to the last chunk of all the
             // columns which is initialised as [Self::new] guarantees that
             let last_chunk_idx = num_chunks - 1;
-            let max_bit_in_last_chunk = (c_graph.n_qubits - 1) % CHUNK_SIZE;
-            let mut graph = Graph::new(c_graph.n_qubits);
+            let max_bit_in_last_chunk = (self.n_qubits - 1) % CHUNK_SIZE;
+            let mut graph = Graph::new(self.n_qubits);
 
             let mut potentially_add_edge =
                 |chunk: u64, chunk_idx: usize, i: usize, j: usize| {
@@ -214,33 +214,37 @@ mod graph_transformation {
                         graph.add_edge(i, chunk_idx * CHUNK_SIZE + j);
                     }
                 };
-            for i in 0..(c_graph.n_qubits - 1) {
+            for i in 0..(self.n_qubits - 1) {
                 // Safety: we have i < n_qubits - 1 <= n_qubits - 1
-                let slice = unsafe { *c_graph.slices.add(i) };
+                let slice = unsafe { *self.slices.add(i) };
                 let start_j = i + 1;
                 let current_chunk_idx = start_j / CHUNK_SIZE;
                 if current_chunk_idx != num_chunks - 1 {
                     // Safety: we have current_chunk_idx = (i + 1) / CHUNK_SIZE <=
                     // (n_qubits - 1) / CHUNK_SIZE = num_chunks - 1 = last_chunk_idx,
                     // which is a valid index
-                    let chunk = unsafe { *slice.add(current_chunk_idx) };
-                    for j in start_j..CHUNK_SIZE {
-                        potentially_add_edge(chunk, current_chunk_idx, i, j);
+                    let chunk = unsafe { &mut *slice.add(current_chunk_idx) };
+                    for j in (start_j % CHUNK_SIZE)..CHUNK_SIZE {
+                        potentially_add_edge(*chunk, current_chunk_idx, i, j);
                     }
+                    *chunk = 0;
                 }
                 for chunk_idx in (current_chunk_idx + 1)..(num_chunks - 1) {
                     // Safety: we have chunk_idx < num_chunks - 1 = last_chunk_idx, which
                     // is a valid index
-                    let chunk = unsafe { *slice.add(chunk_idx) };
+                    let chunk = unsafe { &mut *slice.add(chunk_idx) };
                     for j in 0..CHUNK_SIZE {
-                        potentially_add_edge(chunk, chunk_idx, i, j);
+                        potentially_add_edge(*chunk, chunk_idx, i, j);
                     }
+                    *chunk = 0;
                 }
                 // Safety: last_chunk_idx is a valid index
-                let chunk = unsafe { *slice.add(last_chunk_idx) };
-                for j in (start_j % CHUNK_SIZE)..(max_bit_in_last_chunk + 1) {
-                    potentially_add_edge(chunk, last_chunk_idx, i, j);
+                let chunk = unsafe { &mut *slice.add(last_chunk_idx) };
+                // for j in (start_j % CHUNK_SIZE)..(max_bit_in_last_chunk + 1) {
+                for j in 0..(max_bit_in_last_chunk + 1) {
+                    potentially_add_edge(*chunk, last_chunk_idx, i, j);
                 }
+                *chunk = 0;
             }
 
             graph
@@ -248,49 +252,34 @@ mod graph_transformation {
 
         #[cfg(test)]
         // the safety arguments are analougous to [Self::to_graph]
-        pub fn simpler_to_graph(c_graph: CabaliserGraph) -> Graph {
-            let mut graph = Graph::new(c_graph.n_qubits);
-            for i in 0..c_graph.n_qubits {
-                let slice = unsafe { *c_graph.slices.add(i) };
-                for j in 0..c_graph.n_qubits {
-                    let chunk = unsafe { *slice.add(j / CHUNK_SIZE) };
-                    if (chunk & (1 << (j % CHUNK_SIZE))) != 0 {
+        pub fn mut_simpler_to_graph_and_flush(&mut self) -> Graph {
+            let mut graph = Graph::new(self.n_qubits);
+            for i in 0..self.n_qubits {
+                let slice = unsafe { *self.slices.add(i) };
+                for j in 0..self.n_qubits {
+                    let chunk = unsafe { &mut *slice.add(j / CHUNK_SIZE) };
+                    let bit = 1 << (j % CHUNK_SIZE);
+                    if (*chunk & bit) != 0 {
                         graph.add_edge(i, j);
+                        *chunk &= !bit;
                     }
                 }
             }
             graph
         }
 
-        /// Writes the given [Graph] into the given `buffer_slices` that is assumed to be
+        /// Writes the given [Graph] into the given `self.slices` that is assumed to be
         /// initalised with zeros.
         ///
         /// # Safety
-        /// `buffer_slices` must be valid for `graph.num_nodes()` and each slice
-        /// `buffer_slices[i]` must again be valid for `graph.num_nodes()`.
-        pub unsafe fn from_graph(
-            graph: &Graph,
-            buffer_slices: *mut *mut u64,
-            original_graph: Option<&Graph>,
-        ) -> CabaliserGraph {
-            let c_graph = CabaliserGraph {
-                n_qubits: graph.num_nodes(),
-                slices: buffer_slices,
-            };
-            if let Some(original_graph) = original_graph {
-                // cf. below for the safety arguments
-                for i in 0..graph.num_nodes() {
-                    let slice = unsafe { *c_graph.slices.add(i) };
-                    for &neighbour in original_graph.get_neighbours(i).unwrap() {
-                        let chunk = unsafe { &mut *slice.add(neighbour / CHUNK_SIZE) };
-                        chunk.bitxor_assign(1 << (neighbour % CHUNK_SIZE))
-                    }
-                }
-            }
-            for i in 0..graph.num_nodes() {
+        /// `self.slices` must be valid for `graph.num_nodes()` and each slice
+        /// `self.slices[i]` must again be valid for `graph.num_nodes()`.
+        pub unsafe fn mut_from_graph(&mut self, graph: &Graph) {
+            assert_eq!(self.n_qubits, graph.num_nodes());
+            for i in 0..self.n_qubits {
                 // Safety: we have i < graph.num_nodes() <= graph.num_nodes - 1, which is
                 // a valid index
-                let slice = unsafe { *c_graph.slices.add(i) };
+                let slice = unsafe { *self.slices.add(i) };
                 for &neighbour in graph.get_neighbours(i).unwrap() {
                     // Safety: we have neighbour / CHUNK_SIZE < graph.num_nodes() /
                     // CHUNK_SIZE <= num_chunks - 1 = last_chunk_idx, which is a valid
@@ -299,7 +288,6 @@ mod graph_transformation {
                     chunk.bitor_assign(1 << (neighbour % CHUNK_SIZE))
                 }
             }
-            c_graph
         }
     }
 }
@@ -492,41 +480,42 @@ fn opt_seed(seed_from_entropy: bool, seed: u64) -> Option<u64> {
     }
 }
 
+/// # Safety
+/// - `slices` must be initialised for `n_qubits` and each slice `slices[i]` must again be
+///   valid for `n_qubits`. Similarly, `output_slices` must be valid for `n_qubits` and
+///   each slice `output_slices[i]` must again be valid for `n_qubits`.
+/// - `cliffords` and `output_cliffords` must be valid for `n_qubits`.
 #[allow(clippy::too_many_arguments)]
 unsafe fn search_helper(
     n_qubits: size_t,
     slices: *mut *mut u64,
     cliffords: *mut LcmhSingleQubitClifford,
-    output_slices: *mut *mut u64,
-    output_cliffords: *mut LcmhSingleQubitClifford,
     cooling_config: CoolingConfiguration,
     cost_function: LcmhCostFunction,
     seed: Option<u64>,
 ) -> LcmhSearchArtifacts {
-    // Safety: this function assumes the same Safety guarantees `slices` as
+    // Safety: this function assumes the same Safety guarantees for `slices` as
     // [CabaliserGraph::new] for
-    let c_graph = unsafe { CabaliserGraph::new(n_qubits, slices) };
-    let original_graph = CabaliserGraph::to_graph(c_graph);
+    let mut c_graph = unsafe { CabaliserGraph::new(n_qubits, slices) };
+    let original_graph = c_graph.mut_to_graph_and_flush();
     let mut base_cliffords = Vec::with_capacity(n_qubits);
     for i in 0..n_qubits {
         // Safety: corrections has a length of n_qubits, so i < n_qubits
         let c_clifford = unsafe { *cliffords.add(i) };
         base_cliffords.push(Clifford::from_cabaliser_encoding(c_clifford));
     }
-    let (graph, corrections, artifacts) = search::search(
+    let (new_graph, clifford_corrections, artifacts) = search::search(
         original_graph.clone(),
         Cliffords::new(base_cliffords),
         cooling_config,
         cost_function,
         seed,
     );
-    // Safety: this function assumes the same Safety guarantees `output_slices` as
-    // [CabaliserGraph::from_graph] for `graph`.
-    // unsafe { CabaliserGraph::from_graph(&graph, output_slices, Some(&original_graph)) };
-    unsafe { CabaliserGraph::from_graph(&graph, output_slices, None) };
-    for (i, clifford) in corrections.into_data().into_iter().enumerate() {
+    // Safety: as above when we created c_graph
+    unsafe { c_graph.mut_from_graph(&new_graph) };
+    for (i, clifford) in clifford_corrections.into_data().into_iter().enumerate() {
         // Safety: corrections has a length of n_qubits, so i < n_qubits
-        unsafe { *output_cliffords.add(i) = clifford.into_cabaliser_encoding() };
+        unsafe { *cliffords.add(i) = clifford.into_cabaliser_encoding() };
     }
     LcmhSearchArtifacts::from_artifacts(artifacts)
 }
@@ -568,8 +557,6 @@ pub unsafe extern "C" fn lcmh_search(
     n_qubits: size_t,
     slices: *mut *mut u64,
     cliffords: *mut LcmhSingleQubitClifford,
-    output_slices: *mut *mut u64,
-    output_cliffords: *mut LcmhSingleQubitClifford,
     cooling_config: LcmhCoolingConfiguration,
     cost_function: LcmhCostFunction,
     seed_from_entropy: bool,
@@ -580,8 +567,6 @@ pub unsafe extern "C" fn lcmh_search(
             n_qubits,
             slices,
             cliffords,
-            output_slices,
-            output_cliffords,
             cooling_config.into(),
             cost_function,
             opt_seed(seed_from_entropy, seed),
@@ -598,8 +583,6 @@ pub unsafe extern "C" fn lcmh_search_no_artifacts(
     n_qubits: size_t,
     slices: *mut *mut u64,
     cliffords: *mut LcmhSingleQubitClifford,
-    output_slices: *mut *mut u64,
-    output_cliffords: *mut LcmhSingleQubitClifford,
     cooling_config: LcmhCoolingConfiguration,
     cost_function: LcmhCostFunction,
     seed_from_entropy: bool,
@@ -610,8 +593,6 @@ pub unsafe extern "C" fn lcmh_search_no_artifacts(
             n_qubits,
             slices,
             cliffords,
-            output_slices,
-            output_cliffords,
             cooling_config,
             cost_function,
             seed_from_entropy,
@@ -641,16 +622,12 @@ pub unsafe extern "C" fn lcmh_search_with_defaults(
     n_qubits: size_t,
     slices: *mut *mut u64,
     cliffords: *mut LcmhSingleQubitClifford,
-    output_slices: *mut *mut u64,
-    output_cliffords: *mut LcmhSingleQubitClifford,
 ) -> LcmhSearchArtifacts {
     unsafe {
         search_helper(
             n_qubits,
             slices,
             cliffords,
-            output_slices,
-            output_cliffords,
             get_default_cooling_config(),
             default_cost_function,
             None,
@@ -667,17 +644,9 @@ pub unsafe extern "C" fn lcmh_search_with_defaults_no_return(
     n_qubits: size_t,
     slices: *mut *mut u64,
     cliffords: *mut LcmhSingleQubitClifford,
-    output_slices: *mut *mut u64,
-    output_cliffords: *mut LcmhSingleQubitClifford,
 ) {
     unsafe {
-        let _ = lcmh_search_with_defaults(
-            n_qubits,
-            slices,
-            cliffords,
-            output_slices,
-            output_cliffords,
-        );
+        let _ = lcmh_search_with_defaults(n_qubits, slices, cliffords);
     }
 }
 
@@ -690,8 +659,6 @@ pub unsafe extern "C" fn lcmh_search_with_defaults_except_cooling_config(
     n_qubits: size_t,
     slices: *mut *mut u64,
     cliffords: *mut LcmhSingleQubitClifford,
-    output_slices: *mut *mut u64,
-    output_cliffords: *mut LcmhSingleQubitClifford,
     cooling_config: LcmhCoolingConfiguration,
 ) -> LcmhSearchArtifacts {
     unsafe {
@@ -699,8 +666,6 @@ pub unsafe extern "C" fn lcmh_search_with_defaults_except_cooling_config(
             n_qubits,
             slices,
             cliffords,
-            output_slices,
-            output_cliffords,
             cooling_config.into(),
             default_cost_function,
             None,
@@ -718,8 +683,6 @@ pub unsafe extern "C" fn lcmh_search_with_defaults_except_cooling_config_no_retu
     n_qubits: size_t,
     slices: *mut *mut u64,
     cliffords: *mut LcmhSingleQubitClifford,
-    output_slices: *mut *mut u64,
-    output_cliffords: *mut LcmhSingleQubitClifford,
     cooling_config: LcmhCoolingConfiguration,
 ) {
     unsafe {
@@ -727,8 +690,6 @@ pub unsafe extern "C" fn lcmh_search_with_defaults_except_cooling_config_no_retu
             n_qubits,
             slices,
             cliffords,
-            output_slices,
-            output_cliffords,
             cooling_config,
         );
     }
@@ -762,44 +723,110 @@ mod tests {
         }
     }
 
+    impl PartialEq for CabaliserGraph {
+        fn eq(&self, other: &Self) -> bool {
+            if self.n_qubits != other.n_qubits {
+                return false;
+            }
+            for i in 0..self.n_qubits {
+                let slice_self = unsafe { *self.slices.add(i) };
+                let slice_other = unsafe { *other.slices.add(i) };
+                for j in 0..self.n_qubits.div_ceil(CHUNK_SIZE) {
+                    let chunk_self = unsafe { *slice_self.add(j) };
+                    let chunk_other = unsafe { *slice_other.add(j) };
+                    if chunk_self != chunk_other {
+                        return false;
+                    }
+                }
+            }
+            true
+        }
+    }
+
     #[test]
     fn graph_tranformations() {
         crate::tests::catch_seed_on_panic(None, |mut rng| {
-            let (graph, _) = crate::tests::create_random_graph(&mut rng, 50);
-            let num_nodes = graph.num_nodes();
-            #[allow(clippy::manual_div_ceil)]
-            let chunks_per_column = (num_nodes + CHUNK_SIZE - 1) / CHUNK_SIZE;
-            let slices_buffer = vec![0.0; num_nodes * chunks_per_column];
-            let (slices_buffer_ptr, slices_buffer_len, slices_buffer_cap) =
-                slices_buffer.into_raw_parts();
-            let mut buffer_slices: Vec<*mut u64> = Vec::with_capacity(num_nodes);
-            for i in 0..num_nodes {
-                let slice_ptr =
-                    unsafe { slices_buffer_ptr.add(i * chunks_per_column) as *mut u64 };
-                buffer_slices.push(slice_ptr);
-            }
-            let buffer_slices_ptr = buffer_slices.as_mut_ptr();
+            for _ in 0..3 {
+                let (graph, _) = crate::tests::create_random_graph(&mut rng, 1000);
+                let num_nodes = graph.num_nodes();
+                #[allow(clippy::manual_div_ceil)]
+                let chunks_per_column = (num_nodes + CHUNK_SIZE - 1) / CHUNK_SIZE;
 
-            let c_graph = unsafe {
-                graph_transformation::CabaliserGraph::from_graph(
-                    &graph,
-                    buffer_slices_ptr,
-                    None,
-                )
-            };
-            let graph_from_c_graph =
-                graph_transformation::CabaliserGraph::simpler_to_graph(c_graph.clone());
-            assert_eq!(graph, graph_from_c_graph);
-            let graph_from_c_graph =
-                graph_transformation::CabaliserGraph::to_graph(c_graph);
-            assert_eq!(graph, graph_from_c_graph);
-            let _ = unsafe {
-                Vec::from_raw_parts(
+                let new_c_graph = |slices_buffer: Vec<f64>| -> (
+                    CabaliserGraph,
+                    *mut f64,
+                    usize,
+                    usize,
+                    Vec<*mut u64>,
+                ) {
+                    let (slices_buffer_ptr, slices_buffer_len, slices_buffer_cap) =
+                        slices_buffer.into_raw_parts();
+                    let mut slices: Vec<*mut u64> = Vec::with_capacity(num_nodes);
+                    for i in 0..num_nodes {
+                        let slice_ptr = unsafe {
+                            slices_buffer_ptr.add(i * chunks_per_column) as *mut u64
+                        };
+                        slices.push(slice_ptr);
+                    }
+                    let slices_ptr = slices.as_mut_ptr();
+                    (
+                        unsafe { CabaliserGraph::new(num_nodes, slices_ptr) },
+                        slices_buffer_ptr,
+                        slices_buffer_len,
+                        slices_buffer_cap,
+                        slices,
+                    )
+                };
+
+                let slices_buffer = vec![0.0; num_nodes * chunks_per_column];
+                let (
+                    mut c_graph,
                     slices_buffer_ptr,
                     slices_buffer_len,
                     slices_buffer_cap,
-                )
-            };
+                    _slices,
+                ) = new_c_graph(slices_buffer);
+                unsafe { c_graph.mut_from_graph(&graph) };
+                assert_eq!(c_graph, c_graph);
+
+                let mut slices_buffer_clone = vec![0.0; num_nodes * chunks_per_column];
+                for (i, chunk) in slices_buffer_clone.iter_mut().enumerate() {
+                    *chunk = unsafe { *slices_buffer_ptr.add(i) };
+                }
+                let (
+                    c_graph_clone,
+                    slices_buffer_ptr_clone,
+                    slices_buffer_len_clone,
+                    slices_buffer_cap_clone,
+                    _slices_clone,
+                ) = new_c_graph(slices_buffer_clone);
+
+                assert_eq!(c_graph, c_graph_clone);
+
+                let graph_from_c_graph = c_graph.mut_simpler_to_graph_and_flush();
+                assert_eq!(graph, graph_from_c_graph);
+                unsafe { c_graph.mut_from_graph(&graph_from_c_graph) };
+                assert_eq!(c_graph, c_graph_clone);
+                let graph_from_c_graph = c_graph.mut_to_graph_and_flush();
+                assert_eq!(graph, graph_from_c_graph);
+                unsafe { c_graph.mut_from_graph(&graph_from_c_graph) };
+                assert_eq!(c_graph, c_graph_clone);
+
+                let _ = unsafe {
+                    Vec::from_raw_parts(
+                        slices_buffer_ptr,
+                        slices_buffer_len,
+                        slices_buffer_cap,
+                    )
+                };
+                let _ = unsafe {
+                    Vec::from_raw_parts(
+                        slices_buffer_ptr_clone,
+                        slices_buffer_len_clone,
+                        slices_buffer_cap_clone,
+                    )
+                };
+            }
         });
     }
 }
