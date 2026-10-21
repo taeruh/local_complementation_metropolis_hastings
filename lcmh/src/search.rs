@@ -208,21 +208,23 @@ mod tests {
     #[test]
     fn test_search() {
         crate::tests::catch_seed_on_panic(None, |mut rng| {
-            let (graph, cliffords) = crate::tests::create_random_graph(&mut rng, 30);
-            let reduced_init = stabiliser_group::reduce(&graph, cliffords.get_data());
+            for _ in 0..3 {
+                let (graph, cliffords) = crate::tests::create_random_graph(&mut rng, 100);
+                let reduced_init = stabiliser_group::reduce(&graph, cliffords.get_data());
 
-            let cooling_config = CoolingConfiguration {
-                betas: vec![0.1, 0.5, 10.0],
-                num_steps_per_beta: vec![5, 5, 5],
-            };
+                let cooling_config = CoolingConfiguration {
+                    betas: vec![0.1, 0.5, 10.0],
+                    num_steps_per_beta: vec![5, 5, 5],
+                };
 
-            let (best_graph, best_cliffords, artifacts) =
-                search(graph, cliffords, cooling_config, test_cost_function, None);
+                let (best_graph, best_cliffords, artifacts) =
+                    search(graph, cliffords, cooling_config, test_cost_function, None);
 
-            let reduced_after =
-                stabiliser_group::reduce(&best_graph, best_cliffords.get_data());
-            assert_eq!(reduced_init, reduced_after);
-            assert!(artifacts.best_cost <= artifacts.initial_cost);
+                let reduced_after =
+                    stabiliser_group::reduce(&best_graph, best_cliffords.get_data());
+                assert_eq!(reduced_init, reduced_after);
+                assert!(artifacts.best_cost <= artifacts.initial_cost);
+            }
         });
     }
 }

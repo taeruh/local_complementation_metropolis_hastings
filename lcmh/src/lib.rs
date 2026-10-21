@@ -68,19 +68,21 @@ mod tests {
     #[test]
     fn local_complementation() {
         catch_seed_on_panic(None, |mut rng| {
-            let (mut graph, mut cliffords) = create_random_graph(&mut rng, 10);
+            for _ in 0..3 {
+                let (mut graph, mut cliffords) = create_random_graph(&mut rng, 100);
 
-            let reduced_init = stabiliser_group::reduce(&graph, cliffords.get_data());
+                let reduced_init = stabiliser_group::reduce(&graph, cliffords.get_data());
 
-            for node in 0..graph.num_nodes() {
-                cliffords.inverse_local_complementation(
-                    node,
-                    graph.get_neighbours(node).unwrap(),
-                );
-                graph.local_complementation(node);
-                let reduced_after =
-                    stabiliser_group::reduce(&graph, cliffords.get_data());
-                assert_eq!(reduced_init, reduced_after);
+                for node in 0..graph.num_nodes() {
+                    cliffords.inverse_local_complementation(
+                        node,
+                        graph.get_neighbours(node).unwrap(),
+                    );
+                    graph.local_complementation(node);
+                    let reduced_after =
+                        stabiliser_group::reduce(&graph, cliffords.get_data());
+                    assert_eq!(reduced_init, reduced_after);
+                }
             }
         });
     }

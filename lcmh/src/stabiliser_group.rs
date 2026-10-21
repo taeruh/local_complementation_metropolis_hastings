@@ -41,7 +41,7 @@ impl Pauli {
         let (other_z, other_x) = other.both();
         for i in 0..n {
             if self_x[i] && other_z[i] {
-                phase += 2;
+                phase = (phase + 2) % 4;
             }
             self_z[i] ^= other_z[i];
             self_x[i] ^= other_x[i];
