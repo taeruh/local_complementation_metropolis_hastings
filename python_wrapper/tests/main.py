@@ -6,7 +6,7 @@ import numpy as np
 from math import isnan
 from itertools import chain
 from lcmh import core_lib
-from lcmh.cabaliser_interface_helper import CliffordBuffer, WidgetAlias, WidgetPtrCopy
+from lcmh import cabaliser_interface_helper
 from cabaliser.widget import Widget
 from cabaliser.structs import WidgetType
 from cabaliser import gates
@@ -15,7 +15,7 @@ from cabaliser.io_array_wrappers import LocalCliffords
 from cabaliser import local_simulator
 
 
-def some_widget() -> Widget:
+def some_widget(do_lcmh=True) -> Widget:
     def some_gate(a, b, c):
         return [
             (gates.S, (b,)),
@@ -35,70 +35,35 @@ def some_widget() -> Widget:
         ]
 
     gate = some_gate(0, 1, 2)
-    # wid = Widget(n_qubits, max_qubits, teleport_input=False)
     wid = Widget(3, 10)
     ops = OperationSequence(len(gate))
     for opcode, args in gate:
         ops.append(opcode, *args)
     wid(ops)
-    wid.decompose()
+    wid.decompose(do_lcmh=do_lcmh)
     return wid
 
 
 EPS = 1e-6
 
-
 def main():
     output_widget = some_widget()
-    input_widget = some_widget()
+    input_widget = some_widget(False)
     n_qubits = output_widget.get_n_qubits()
     max_qubits = output_widget.get_max_qubits()
 
-    output_alias = WidgetAlias(output_widget)
-    output_copy = WidgetPtrCopy(output_alias)
-
-    input_clifford_buffer = CliffordBuffer(n_qubits)
-    input_cliffords = LocalCliffords(
-        input_clifford_buffer.n_qubits, input_clifford_buffer.cliffords
-    )
-    # print(input_cliffords.to_list())
-
-    output_clifford_buffer = CliffordBuffer(n_qubits)
-    output_cliffords = LocalCliffords(
-        output_clifford_buffer.n_qubits, output_clifford_buffer.cliffords
-    )
-
-    # the local simulator is patched to include these corrections directly after the cz
-    # operations
-    input_widget.local_complement_corrections = input_cliffords
-    output_widget.local_complement_corrections = output_cliffords
-
-    artifacts = core_lib.core_lib.lcmh_search_with_defaults(
-        n_qubits, output_copy.slices, output_cliffords.arr
-    )
-
-
-    print("initial cost", artifacts.initial_cost)
-    print("output cost", artifacts.best_cost)
-
-    input_widget.tableau_print()
-    print()
-    output_widget.tableau_print()
-    print()
-    print(output_cliffords.to_list(cache=False))
+    # input_widget.tableau_print()
+    # print(input_widget.lc_corrections.to_list())
+    # print()
+    # output_widget.tableau_print()
+    # print(output_widget.lc_corrections.to_list())
 
     for i in range(5):
-    # for i in range(1):
-        print(i)
+        # print(i)
         input_state = local_simulator.kr(
             local_simulator.state_prep(*list(np.random.random(2))),
             local_simulator.state_prep(*list(np.random.random(2))),
             local_simulator.state_prep(*list(np.random.random(2))),
-            # local_simulator.plus_state,
-            # local_simulator.plus_state,
-            # local_simulator.plus_state,
-            # local_simulator.state_prep(*list(np.random.random(2))),
-            # local_simulator.state_prep(*list(np.random.random(2))),
         )
         input_widget_state = local_simulator.simulate_widget(
             input_widget, input_state=input_state, trace_graph=True

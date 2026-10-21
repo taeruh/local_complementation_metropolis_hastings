@@ -99,6 +99,8 @@ pub fn search(
     cost_function: LcmhCostFunction,
     seed: Option<u64>,
 ) -> (Graph, Cliffords, SearchArtifacts) {
+    // println!("num_nodes: {:?}", graph.num_nodes());
+    // println!("num_edges: {:?}", graph.num_edges());
     let mut search = Search::new(
         // graph.clone(),
         // cliffords.clone(),
@@ -167,6 +169,7 @@ impl Search {
             self.graph.local_complementation(node);
             let new_cost = (self.cost_function)(&self.graph);
             let delta_cost = new_cost - current_cost;
+            // println!("{:?}", new_cost);
             if delta_cost < 0.0
                 || self.rng.sample::<f64, StandardUniform>(StandardUniform)
                     < (-beta * delta_cost).exp()

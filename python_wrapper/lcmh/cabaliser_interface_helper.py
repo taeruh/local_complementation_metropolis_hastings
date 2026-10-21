@@ -9,10 +9,13 @@ from ctypes import (
     c_byte,
 )
 
-from cabaliser.widget import Widget
+class CliffordBuffer:
+    def __init__(self, n_qubits):
+        self.n_qubits = n_qubits
+        cliffords = [(1 << 5) for _ in range(n_qubits)]
+        self.cliffords = (c_byte * n_qubits)(*cliffords)
 
-
-class Tableau(Structure):
+class _Tableau(Structure):
     _fields_ = [
         ("n_qubits", c_size_t),
         ("slice_len", c_size_t),
@@ -23,31 +26,6 @@ class Tableau(Structure):
         ("orientation", c_bool),
     ]
 
-
-def _get_tableau_from_widget(widget: Widget):
-    return ctypes.cast(widget.widget.contents.__tableau, POINTER(Tableau))
-
-
-class WidgetAlias:
-    def __init__(self, widget: Widget):
-        self.widget = widget
-        self.tableau = _get_tableau_from_widget(widget)
-        self.queue = widget.widget.contents.queue
-
-    def update(self, widget: WidgetPtrCopy):
-        self.tableau.contents.slices_z = widget.slices
-        self.queue.contents.cliffords = widget.cliffords
-        self.widget.local_cliffords = None
-
-
-class WidgetPtrCopy:
-    def __init__(self, widget: WidgetAlias):
-        self.slices = ctypes.pointer(widget.tableau.contents.slices_z.contents)
-        self.cliffords = ctypes.pointer(widget.queue.contents.cliffords.contents)
-
-
-class CliffordBuffer:
-    def __init__(self, n_qubits):
-        self.n_qubits = n_qubits
-        cliffords = [(1 << 5) for _ in range(n_qubits)]
-        self.cliffords = (c_byte * n_qubits)(*cliffords)
+def get_slices(widget):
+    tableau = ctypes.cast(widget.widget.contents.__tableau, POINTER(_Tableau))
+    return tableau.contents.slices_z

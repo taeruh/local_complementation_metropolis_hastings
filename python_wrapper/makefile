@@ -11,3 +11,10 @@ $(package): $(libcore_lib)
 $(libcore_lib):
 	mkdir -p $(package)/libs
 	cp $(core_lib_path) $@
+
+install_cabaliser: cabaliser
+	cd cabaliser; make
+
+cabaliser:
+	cd cabaliser; git checkout lcmh_patch
+	git clone git@github.com:taeruh/cabaliser.git

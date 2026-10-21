@@ -609,7 +609,7 @@ fn get_default_cooling_config() -> CoolingConfiguration {
     // not sure what a good default cooling schedule is ...
     CoolingConfiguration {
         betas: vec![1.0, 10.0, 100.0, 1000.0, 10000.0, 1.0, 10.0, 100.0, 1000.0, 10000.0],
-        num_steps_per_beta: vec![20, 20, 20, 20, 20, 20, 20, 20, 20, 20],
+        num_steps_per_beta: vec![10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
     }
 }
 
@@ -640,7 +640,7 @@ pub unsafe extern "C" fn lcmh_search_with_defaults(
 /// # Safety
 /// Sam as for [lcmh_search].
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn lcmh_search_with_defaults_no_return(
+pub unsafe extern "C" fn lcmh_search_with_defaults_no_artifacts(
     n_qubits: size_t,
     slices: *mut *mut u64,
     cliffords: *mut LcmhSingleQubitClifford,
@@ -679,7 +679,7 @@ pub unsafe extern "C" fn lcmh_search_with_defaults_except_cooling_config(
 /// # Safety
 /// Sam as for [lcmh_search].
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn lcmh_search_with_defaults_except_cooling_config_no_return(
+pub unsafe extern "C" fn lcmh_search_with_defaults_except_cooling_config_no_artifacts(
     n_qubits: size_t,
     slices: *mut *mut u64,
     cliffords: *mut LcmhSingleQubitClifford,

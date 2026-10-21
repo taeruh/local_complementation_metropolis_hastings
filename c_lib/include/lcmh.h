@@ -62,7 +62,7 @@ LcmhSearchArtifacts lcmh_search_with_defaults(
     size_t n_qubits, uint64_t **slices, LcmhSingleQubitClifford *cliffords,
     uint64_t **output_slices, LcmhSingleQubitClifford *output_cliffords);
 
-void lcmh_search_with_defaults_no_return(
+void lcmh_search_with_defaults_no_artifacts(
     size_t n_qubits, uint64_t **slices, LcmhSingleQubitClifford *cliffords,
     uint64_t **output_slices, LcmhSingleQubitClifford *output_cliffords);
 
@@ -71,7 +71,7 @@ LcmhSearchArtifacts lcmh_search_with_defaults_except_cooling_config(
     uint64_t **output_slices, LcmhSingleQubitClifford *output_cliffords,
     LcmhCoolingConfiguration cooling_config);
 
-void lcmh_search_with_defaults_except_cooling_config_no_return(
+void lcmh_search_with_defaults_except_cooling_config_no_artifacts(
     size_t n_qubits, uint64_t **slices, LcmhSingleQubitClifford *cliffords,
     uint64_t **output_slices, LcmhSingleQubitClifford *output_cliffords,
     LcmhCoolingConfiguration cooling_config);

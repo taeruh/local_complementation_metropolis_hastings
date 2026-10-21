@@ -4,3 +4,4 @@ target/
 .venv
 *egg-info*
 **/build/*
+python_wrapper/cabaliser
