@@ -6,6 +6,7 @@ from ctypes import (
     c_size_t,
     c_uint64,
     c_bool,
+    c_byte,
 )
 
 from cabaliser.widget import Widget
@@ -43,3 +44,10 @@ class WidgetPtrCopy:
     def __init__(self, widget: WidgetAlias):
         self.slices = ctypes.pointer(widget.tableau.contents.slices_z.contents)
         self.cliffords = ctypes.pointer(widget.queue.contents.cliffords.contents)
+
+
+class CliffordBuffer:
+    def __init__(self, n_qubits):
+        self.n_qubits = n_qubits
+        cliffords = [(1 << 5) for _ in range(n_qubits)]
+        self.cliffords = (c_byte * n_qubits)(*cliffords)

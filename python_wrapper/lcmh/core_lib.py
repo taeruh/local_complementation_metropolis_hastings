@@ -58,15 +58,11 @@ lcmh_search_with_defaults_no_return.argtypes = [
     c_size_t,
     POINTER(POINTER(c_size_t)),
     POINTER(c_byte),
-    POINTER(POINTER(c_size_t)),
-    POINTER(c_byte),
 ]
 
 lcmh_search_with_defaults = core_lib.lcmh_search_with_defaults
 lcmh_search_with_defaults.argtypes = [
     c_size_t,
-    POINTER(POINTER(c_size_t)),
-    POINTER(c_byte),
     POINTER(POINTER(c_size_t)),
     POINTER(c_byte),
 ]
@@ -79,8 +75,6 @@ lcmh_search_with_defaults_except_cooling_config_no_return.argtypes = [
     c_size_t,
     POINTER(POINTER(c_size_t)),
     POINTER(c_byte),
-    POINTER(POINTER(c_size_t)),
-    POINTER(c_byte),
     LcmhCoolingConfiguration,
 ]
 
@@ -89,8 +83,6 @@ lcmh_search_with_defaults_except_cooling_config = (
 )
 lcmh_search_with_defaults_except_cooling_config.argtypes = [
     c_size_t,
-    POINTER(POINTER(c_size_t)),
-    POINTER(c_byte),
     POINTER(POINTER(c_size_t)),
     POINTER(c_byte),
     LcmhCoolingConfiguration,
