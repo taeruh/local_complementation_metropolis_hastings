@@ -5,10 +5,11 @@ graph(state). The goal is to integrate this into Cabaliser.
 
 ## Installation
 
-- The header file is located at `./c_lib/include/lcmh.h`.
-- Building the dynamic and static libraries can be done via `make build`; the files will
-be located in `./c_lib/libs/`. This requires a Rust toolchain to be installed.
-- Cf. the makefile in the `python_wrapper/` directory for building the Python wrapper.
+- The header file is located at `c_lib/include/lcmh.h`.
+- Building the dynamic and static libraries can be done via `make c_libraries`; the files
+  will be located in `c_lib/libs/`. This requires a Rust toolchain to be installed.
+- The python wrapper package can be installed (assuming you are in a virtual environment
+  with pip installed) via `make`.
 
 ### Build Requirements and Dependencies
 
@@ -38,21 +39,12 @@ be located in `./c_lib/libs/`. This requires a Rust toolchain to be installed.
 
 ## Documentation and Examples
 
-- The documentation in the header file is currently missing, however, most of it already
-  exists (and has just not been copied over yet). See the comment at the top in
-  `./c_lib/include/lcmh.h` for more information on how to get the documentation.
-- There is an example in `./examples/` that shows its intended usage.
-
-## Testing and Bugs
-
-I have not done thorough testing yet, so there are probably bugs.
-
-## Near-Future Work
-
-- Do some testing.
-- Anything else that we'll need to integrate this into Cabaliser or have more
-  sophisticated cost functions (e.g., expose more methods on the graph that can be used in
-  the cost function).
+- The documentation in the header file (and the python wrapper) is currently missing,
+  however, most of it already exists (and has just not been copied over yet). See the
+  comment at the top in `c_lib/include/lcmh.h` for more information on how to get the
+  documentation.
+- There is an example in `example/` in `python_wrapper/examples/` that shows the intended
+  usage.
 
 ## License
 

@@ -44,34 +44,27 @@ typedef double (*LcmhCostFunction)(const LcmhGraph *graph);
 
 LcmhSearchArtifacts lcmh_search(size_t n_qubits, uint64_t **slices,
                                 LcmhSingleQubitClifford *cliffords,
-                                uint64_t **output_slices,
-                                LcmhSingleQubitClifford *output_cliffords,
                                 LcmhCoolingConfiguration cooling_config,
                                 LcmhCostFunction cost_function,
                                 int seed_from_entropy, uint64_t seed);
 
 void lcmh_search_no_artifacts(size_t n_qubits, uint64_t **slices,
                               LcmhSingleQubitClifford *cliffords,
-                              uint64_t **output_slices,
-                              LcmhSingleQubitClifford *output_cliffords,
                               LcmhCoolingConfiguration cooling_config,
                               LcmhCostFunction cost_function,
                               int seed_from_entropy, uint64_t seed);
 
-LcmhSearchArtifacts lcmh_search_with_defaults(
-    size_t n_qubits, uint64_t **slices, LcmhSingleQubitClifford *cliffords,
-    uint64_t **output_slices, LcmhSingleQubitClifford *output_cliffords);
+LcmhSearchArtifacts
+lcmh_search_with_defaults(size_t n_qubits, uint64_t **slices,
+                          LcmhSingleQubitClifford *cliffords);
 
-void lcmh_search_with_defaults_no_artifacts(
-    size_t n_qubits, uint64_t **slices, LcmhSingleQubitClifford *cliffords,
-    uint64_t **output_slices, LcmhSingleQubitClifford *output_cliffords);
+void lcmh_search_with_defaults_no_artifacts(size_t n_qubits, uint64_t **slices,
+                                            LcmhSingleQubitClifford *cliffords);
 
 LcmhSearchArtifacts lcmh_search_with_defaults_except_cooling_config(
     size_t n_qubits, uint64_t **slices, LcmhSingleQubitClifford *cliffords,
-    uint64_t **output_slices, LcmhSingleQubitClifford *output_cliffords,
-    LcmhCoolingConfiguration cooling_config);
+    uint64_t **output_slices, LcmhSingleQubitClifford *output_cliffords);
 
 void lcmh_search_with_defaults_except_cooling_config_no_artifacts(
     size_t n_qubits, uint64_t **slices, LcmhSingleQubitClifford *cliffords,
-    uint64_t **output_slices, LcmhSingleQubitClifford *output_cliffords,
-    LcmhCoolingConfiguration cooling_config);
+    uint64_t **output_slices);

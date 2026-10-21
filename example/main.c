@@ -123,23 +123,20 @@ int main(void) {
   // then)
   uint8_t seed_from_entropy = 0;
   uint64_t seed = 0;
-  // allocate memory slices which will hold the transformed adjacency matrix
-  PseudoCabaliserGraph output_graph = create_pseudo_cabaliser_graph(n_qubits);
 
   // run the search
   LcmhSearchArtifacts artifacts =
       lcmh_search(n_qubits, input_graph.slices, input_graph.cliffords,
-                  output_graph.slices, output_graph.cliffords, cooling_config,
-                  &cost_function, seed_from_entropy, seed);
+                  cooling_config, &cost_function, seed_from_entropy, seed);
 
   printf("\nOutput adjacency matrix:\n");
-  print_adj_matrix(n_qubits, output_graph.slices);
+  print_adj_matrix(n_qubits, input_graph.slices);
 
   printf("\nLocal Clifford operations applied:\n");
-  print_cliffords(n_qubits, output_graph.cliffords);
+  print_cliffords(n_qubits, input_graph.cliffords);
 
   printf("\nInitial cost: %f\n", artifacts.initial_cost);
-  printf("Final cost: %f\n", artifacts.final_cost);
+  printf("Final cost: %f\n", artifacts.best_cost);
 
   // printf("\nCost at each (accepted) MH step:\n");
   // for (size_t i = 0; i < artifacts.length_costs; i++) {
@@ -148,5 +145,4 @@ int main(void) {
 
   lcmh_free_search_artifacts(artifacts);
   free_pseudo_cabaliser_graph(input_graph);
-  free_pseudo_cabaliser_graph(output_graph);
 }
